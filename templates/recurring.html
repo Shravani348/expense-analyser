@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1>🔁 Recurring Expenses</h1>
+    <p>Set expenses that auto-add every month — rent, subscriptions, EMIs</p>
+</div>
+
+<div class="budget-layout">
+
+    <!-- ── LEFT: ADD / EDIT FORM ──────────────── -->
+    <div class="form-card">
+
+        {% if edit_rec %}
+            <h2>✏️ Edit Recurring</h2>
+            <form action="/recurring/update/{{ edit_rec['id'] }}" method="POST">
+        {% else %}
+            <h2>➕ Add Recurring Expense</h2>
+            <form action="/recurring/add" method="POST">
+        {% endif %}
+
+            <!-- Category -->
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category" required>
+                    <option value="">-- Select Category --</option>
+                    {% set categories = ['Food','Transport','Shopping',
+                       'Entertainment','Health','Education',
+                       'Rent','Utilities','Other'] %}
+                    {% for cat in categories %}
+                        <option value="{{ cat }}"
+                            {% if edit_rec and edit_rec['category'] == cat %}
+                                selected
+                            {% endif %}>
+                            {{ cat }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Amount -->
+            <div class="form-group">
+                <label>Amount (₹)</label>
+                <input
+                    type="number"
+                    name="amount"
+                    placeholder="e.g. 1200"
+                    min="1"
+                    step="0.01"
+                    value="{{ edit_rec['amount'] if edit_rec else '' }}"
+                    required
+                >
+            </div>
+
+            <!-- Day of month -->
+            <div class="form-group">
+                <label>
+                    Add on Day of Month
+                    <span class="field-hint">
+                        (1–31, today is {{ current_day }})
+                    </span>
+                </label>
+                <input
+                    type="number"
+                    name="day_of_month"
+                    placeholder="e.g. 1 for 1st of every month"
+                    min="1"
+                    max="31"
+                    value="{{ edit_rec['day_of_month'] if edit_rec else '1' }}"
+                    required
+                >
+            </div>
+
+            <!-- Note -->
+            <div class="form-group">
+                <label>Note <span style="color:#aaa">(optional)</span></label>
+                <input
+                    type="text"
+                    name="note"
+                    placeholder="e.g. House rent, Netflix, EMI"
+                    value="{{ edit_rec['note'] if edit_rec and edit_rec['note'] else '' }}"
+                >
+            </div>
+
+            {% if edit_rec %}
+                <button type="submit" class="btn btn-primary">
+                    💾 Update
+                </button>
+                <a href="{{ url_for('recurring') }}"
+                   class="btn btn-secondary">
+                    ✖ Cancel
+                </a>
+            {% else %}
+                <button type="submit" class="btn btn-primary">
+                    ➕ Add Recurring
+                </button>
+            {% endif %}
+
+        </form>
+
+        <!-- Info box -->
+        <div class="info-box">
+            <p>💡 <strong>How it works:</strong></p>
+            <ul>
+                <li>Add a recurring expense once</li>
+                <li>It auto-adds to your expenses every month</li>
+                <li>You can pause or delete it anytime</li>
+                <li>Auto-added entries are marked <code>[Auto]</code></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- ── RIGHT: RECURRING LIST ───────────────── -->
+    <div class="list-card">
+        <h2>📋 Your Recurring Expenses</h2>
+
+        {% if recurrings %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th>Day</th>
+                    <th>Note</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in recurrings %}
+                <tr class="{{ 'paused-row' if not r['is_active'] else '' }}
+                            {{ 'editing-row' if edit_rec and edit_rec['id'] == r['id'] else '' }}">
+
+                    <td>
+                        {% if r['category'] == 'Food' %}🍔
+                        {% elif r['category'] == 'Transport' %}🚗
+                        {% elif r['category'] == 'Shopping' %}🛍️
+                        {% elif r['category'] == 'Entertainment' %}🎬
+                        {% elif r['category'] == 'Health' %}💊
+                        {% elif r['category'] == 'Education' %}📚
+                        {% elif r['category'] == 'Rent' %}🏠
+                        {% elif r['category'] == 'Utilities' %}💡
+                        {% else %}📦{% endif %}
+                        {{ r['category'] }}
+                    </td>
+
+                    <td class="amount">
+                        ₹{{ "%.2f"|format(r['amount']) }}
+                    </td>
+
+                    <td>
+                        <span class="day-badge">
+                            {{ r['day_of_month'] }}
+                            <small>th</small>
+                        </span>
+                    </td>
+
+                    <td class="note-cell">
+                        {{ r['note'] if r['note'] else '—' }}
+                    </td>
+
+                    <td>
+                        {% if r['is_active'] %}
+                            <span class="status-badge status-active">
+                                ✅ Active
+                            </span>
+                        {% else %}
+                            <span class="status-badge status-paused">
+                                ⏸ Paused
+                            </span>
+                        {% endif %}
+                    </td>
+
+                    <td class="action-btns">
+                        <!-- Edit -->
+                        <a href="/recurring/edit/{{ r['id'] }}"
+                           class="btn-edit" title="Edit">✏️</a>
+
+                        <!-- Toggle pause/resume -->
+                        <a href="/recurring/toggle/{{ r['id'] }}"
+                           class="btn-toggle"
+                           title="{{ 'Pause' if r['is_active'] else 'Resume' }}">
+                            {{ '⏸' if r['is_active'] else '▶️' }}
+                        </a>
+
+                        <!-- Delete -->
+                        <a href="/recurring/delete/{{ r['id'] }}"
+                           class="btn-delete"
+                           title="Delete"
+                           onclick="return confirm('Delete this recurring expense?')">
+                            🗑️
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Monthly total summary -->
+        <div class="recurring-summary">
+            <span>Total recurring per month:</span>
+            <strong class="amount">
+                ₹{{ "%.2f"|format(
+                    recurrings | selectattr('is_active') | sum(attribute='amount')
+                ) }}
+            </strong>
+        </div>
+
+        {% else %}
+        <div class="empty-state">
+            <p>🔁 No recurring expenses yet.</p>
+            <p>Add rent, Netflix, or EMIs to auto-track them!</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

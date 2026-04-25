@@ -1,0 +1,430 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>💬 AI Financial Chat</h1>
+        <p>Ask anything about your expenses — AI knows your real data</p>
+    </div>
+    <a href="{{ url_for('ai_chat_new') }}"
+       class="topbar-btn btn-add-expense"
+       style="text-decoration:none">
+        ✚ New Chat
+    </a>
+</div>
+
+<div class="chat-layout">
+
+    <!-- ── LEFT: CHAT HISTORY SIDEBAR ──────────── -->
+    <div class="chat-sidebar">
+        <div class="chat-sidebar-header">
+            <span>💬 Past Conversations</span>
+        </div>
+
+        {% if past_sessions %}
+            {% for s in past_sessions %}
+            <a href="{{ url_for('ai_chat', session_id=s['session_id']) }}"
+               class="chat-session-item
+                      {% if s['session_id'] == current_session_id %}
+                          chat-session-active
+                      {% endif %}">
+                <div class="session-preview">
+                    {{ (s['first_message'] or 'New conversation')[:40] }}
+                    {% if (s['first_message'] or '')|length > 40 %}...{% endif %}
+                </div>
+                <div class="session-meta">
+                    {{ s['message_count'] }} messages ·
+                    {{ s['started_at'][:10] }}
+                </div>
+                <a href="{{ url_for('ai_chat_delete', session_id=s['session_id']) }}"
+                   class="session-delete"
+                   onclick="return confirm('Delete this conversation?')"
+                   title="Delete">🗑️</a>
+            </a>
+            {% endfor %}
+        {% else %}
+            <div class="chat-empty-sidebar">
+                <p>No conversations yet.</p>
+                <p>Start a new chat!</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- ── RIGHT: CHAT WINDOW ───────────────────── -->
+    <div class="chat-window">
+
+        {% if not current_session_id %}
+        <!-- ── WELCOME SCREEN ─────────────────── -->
+        <div class="chat-welcome">
+            <div class="chat-welcome-icon">🤖</div>
+            <h2>Hi! I'm your AI Financial Advisor</h2>
+            <p>I can see your real expense data and help you understand your spending.</p>
+
+            <div class="chat-suggestions">
+                <p class="suggestion-label">Try asking me:</p>
+                <div class="suggestion-grid">
+                    <button class="suggestion-btn"
+                            onclick="startWithQuestion(this)">
+                        Where am I overspending this month?
+                    </button>
+                    <button class="suggestion-btn"
+                            onclick="startWithQuestion(this)">
+                        How can I save ₹2000 this month?
+                    </button>
+                    <button class="suggestion-btn"
+                            onclick="startWithQuestion(this)">
+                        Analyze my Food spending
+                    </button>
+                    <button class="suggestion-btn"
+                            onclick="startWithQuestion(this)">
+                        What budget should I set for next month?
+                    </button>
+                    <button class="suggestion-btn"
+                            onclick="startWithQuestion(this)">
+                        Am I on track with my budget?
+                    </button>
+                    <button class="suggestion-btn"
+                            onclick="startWithQuestion(this)">
+                        Which category needs most attention?
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        {% else %}
+        <!-- ── MESSAGES AREA ──────────────────── -->
+        <div class="chat-messages" id="chatMessages">
+
+            <!-- System message at top -->
+            <div class="chat-system-msg">
+                💡 AI has access to your real expense data for this conversation
+            </div>
+
+            {% if current_messages %}
+                {% for msg in current_messages %}
+                    {% if msg['role'] == 'user' %}
+                    <div class="chat-bubble user-bubble">
+                        <div class="bubble-content">{{ msg['message'] }}</div>
+                        <div class="bubble-time">
+                            {{ msg['created_at'][11:16] }}
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="chat-bubble ai-bubble">
+                        <div class="bubble-avatar">🤖</div>
+                        <div class="bubble-right">
+                            <div class="bubble-content">{{ msg['message'] }}</div>
+                            <div class="bubble-time">
+                                {{ msg['created_at'][11:16] }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            {% else %}
+                <div class="chat-system-msg">
+                    Send a message to start the conversation!
+                </div>
+            {% endif %}
+
+            <!-- Typing indicator (hidden initially) -->
+            <div class="chat-bubble ai-bubble" id="typingIndicator"
+                 style="display:none">
+                <div class="bubble-avatar">🤖</div>
+                <div class="bubble-right">
+                    <div class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ── INPUT BOX ──────────────────────── -->
+        <div class="chat-input-area">
+            <div class="chat-input-row">
+                <textarea
+                    id="chatInput"
+                    class="chat-input"
+                    placeholder="Ask about your expenses... (Press Enter to send)"
+                    rows="1"
+                ></textarea>
+                <button class="chat-send-btn" id="sendBtn"
+                        onclick="sendMessage()">
+                    ➤
+                </button>
+            </div>
+            <div class="chat-input-hint">
+                Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// ── Session management ────────────────────────
+let currentSessionId = '{{ current_session_id }}';
+let isWaitingForAI   = false;
+
+// ── Auto scroll to bottom ─────────────────────
+function scrollToBottom() {
+    const msgs = document.getElementById('chatMessages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+}
+scrollToBottom();
+
+
+// ── Handle Enter key ──────────────────────────
+const chatInput = document.getElementById('chatInput');
+if (chatInput) {
+    chatInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // Auto resize textarea
+    chatInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+}
+
+
+// ── Suggestion buttons (welcome screen) ───────
+function startWithQuestion(btn) {
+    const question = btn.textContent.trim();
+
+    // Create new session first
+    fetch('/ai-chat/new')
+        .then(() => {
+            const newId = generateId();
+            currentSessionId = newId;
+
+            // Update URL without reload
+            window.history.pushState(
+                {}, '', `/ai-chat?session_id=${newId}`
+            );
+
+            // Rebuild UI as chat window
+            document.querySelector('.chat-window').innerHTML =
+                buildChatWindowHTML();
+
+            // Set question and send
+            document.getElementById('chatInput').value = question;
+            sendMessage();
+        });
+}
+
+function generateId() {
+    return Math.random().toString(36).substring(2, 10);
+}
+
+function buildChatWindowHTML() {
+    return `
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-system-msg">
+                💡 AI has access to your real expense data
+            </div>
+            <div class="chat-bubble ai-bubble" id="typingIndicator"
+                 style="display:none">
+                <div class="bubble-avatar">🤖</div>
+                <div class="bubble-right">
+                    <div class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <div class="chat-input-row">
+                <textarea id="chatInput" class="chat-input"
+                    placeholder="Ask about your expenses..."
+                    rows="1"></textarea>
+                <button class="chat-send-btn" id="sendBtn"
+                        onclick="sendMessage()">➤</button>
+            </div>
+            <div class="chat-input-hint">
+                Press <kbd>Enter</kbd> to send ·
+                <kbd>Shift+Enter</kbd> for new line
+            </div>
+        </div>`;
+}
+
+
+// ── Main send function ────────────────────────
+async function sendMessage() {
+    if (isWaitingForAI) return;
+
+    const input = document.getElementById('chatInput');
+    if (!input) return;
+
+    const message = input.value.trim();
+    if (!message) return;
+
+    // If no session yet, create one
+    if (!currentSessionId) {
+        currentSessionId = generateId();
+        window.history.pushState(
+            {}, '', `/ai-chat?session_id=${currentSessionId}`
+        );
+
+        document.querySelector('.chat-window').innerHTML =
+            buildChatWindowHTML();
+
+        // Re-attach event listener
+        const newInput = document.getElementById('chatInput');
+        newInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    }
+
+    isWaitingForAI = true;
+
+    // Clear input
+    input.value       = '';
+    input.style.height = 'auto';
+
+    // Add user message to UI immediately
+    addBubble('user', message);
+
+    // Show typing indicator
+    const typing = document.getElementById('typingIndicator');
+    if (typing) {
+        typing.style.display = 'flex';
+        scrollToBottom();
+    }
+
+    // Disable send button
+    const btn = document.getElementById('sendBtn');
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/ai-chat/send', {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body   : JSON.stringify({
+                message   : message,
+                session_id: currentSessionId
+            })
+        });
+
+        const data = await res.json();
+
+        // Hide typing indicator
+        if (typing) typing.style.display = 'none';
+
+        if (data.success) {
+            // Update session id if new
+            if (data.session_id) {
+                currentSessionId = data.session_id;
+                window.history.replaceState(
+                    {}, '',
+                    `/ai-chat?session_id=${currentSessionId}`
+                );
+            }
+            // Add AI response with typewriter effect
+            addBubble('ai', data.response, true);
+        } else {
+            addBubble('ai', '❌ ' + (data.error || 'Something went wrong.'));
+        }
+
+    } catch(e) {
+        if (typing) typing.style.display = 'none';
+        addBubble('ai', '❌ Connection failed. Please try again.');
+    }
+
+    isWaitingForAI = false;
+    if (btn) btn.disabled = false;
+    if (input) input.focus();
+}
+
+
+// ── Add bubble to chat UI ─────────────────────
+function addBubble(role, text, typewriter = false) {
+    const msgs = document.getElementById('chatMessages');
+    const typing = document.getElementById('typingIndicator');
+
+    const now  = new Date();
+    const time = now.getHours().toString().padStart(2,'0') + ':' +
+                 now.getMinutes().toString().padStart(2,'0');
+
+    const div = document.createElement('div');
+
+    if (role === 'user') {
+        div.className = 'chat-bubble user-bubble';
+        div.innerHTML = `
+            <div class="bubble-content">${escapeHtml(text)}</div>
+            <div class="bubble-time">${time}</div>`;
+    } else {
+        div.className = 'chat-bubble ai-bubble';
+        div.innerHTML = `
+            <div class="bubble-avatar">🤖</div>
+            <div class="bubble-right">
+                <div class="bubble-content" id="latest-ai-msg"></div>
+                <div class="bubble-time">${time}</div>
+            </div>`;
+    }
+
+    // Insert before typing indicator
+    if (typing && typing.parentNode === msgs) {
+        msgs.insertBefore(div, typing);
+    } else {
+        msgs.appendChild(div);
+    }
+
+    // Fill AI message content
+    if (role === 'ai') {
+        const el = document.getElementById('latest-ai-msg');
+        if (!el) {
+            scrollToBottom();
+            return;
+        }
+
+        if (typewriter) {
+            typewriterEffect(el, text);
+        } else {
+            // Ensure non-typewriter AI bubbles still show text (e.g. errors)
+            el.textContent = text;
+            el.removeAttribute('id');
+        }
+    }
+
+    scrollToBottom();
+}
+
+
+// ── Typewriter effect ─────────────────────────
+function typewriterEffect(element, text) {
+    let i   = 0;
+    element.textContent = '';
+
+    const interval = setInterval(() => {
+        if (i < text.length) {
+            element.textContent += text[i];
+            i++;
+            scrollToBottom();
+        } else {
+            clearInterval(interval);
+            // Remove the id after done
+            element.removeAttribute('id');
+        }
+    }, 18); // speed in ms per character
+}
+
+
+// ── Security helper ───────────────────────────
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,16 @@
+# Virtual environment
+venv/
+
+# Database (local data)
+expense.db
+
+# Python cache
+__pycache__/
+*.pyc
+
+# ⚠️ SECRET — Never commit this!
+.env
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>💰 Expense Analyser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+{% if session.user_id %}
+
+    <!-- ══ LOGGED IN — sidebar layout ══ -->
+    <div class="app-layout">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo">
+                    <div class="brand-icon">💰</div>
+                    <div>
+                        <div class="brand-name">Expense Analyser</div>
+                        <div class="brand-tagline">Smart money tracking</div>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">Main Menu</div>
+
+                <a href="{{ url_for('dashboard') }}"
+                   class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                    <div class="nav-icon">📊</div>
+                    Dashboard
+                </a>
+
+                <a href="{{ url_for('expenses') }}"
+                   class="nav-item {% if request.endpoint in ['expenses','add_expense','edit_expense'] %}active{% endif %}">
+                    <div class="nav-icon">💸</div>
+                    Expenses
+                </a>
+
+                <a href="{{ url_for('budgets') }}"
+                   class="nav-item {% if request.endpoint in ['budgets','add_budget','edit_budget'] %}active{% endif %}">
+                    <div class="nav-icon">💼</div>
+                    Budgets
+                </a>
+
+                <a href="{{ url_for('recurring') }}"
+                   class="nav-item {% if request.endpoint == 'recurring' %}active{% endif %}">
+                    <div class="nav-icon">🔁</div>
+                    Recurring
+                </a>
+
+
+                
+
+                <a href="{{ url_for('ai_advisor') }}"
+   class="nav-item {% if request.endpoint == 'ai_advisor' %}active{% endif %}">
+    <div class="nav-icon">🤖</div>
+    AI Advisor
+</a>
+
+<a href="{{ url_for('ai_chat') }}"
+   class="nav-item {% if request.endpoint in ['ai_chat','ai_chat_new'] %}active{% endif %}">
+    <div class="nav-icon">💬</div>
+    AI Chat
+</a>
+<a href="{{ url_for('saved_tips') }}"
+   class="nav-item {% if request.endpoint == 'saved_tips' %}active{% endif %}">
+    <div class="nav-icon">
+        🔖
+        {% if unread_tips > 0 %}
+            <span class="nav-badge nav-badge-warning">
+                {{ unread_tips }}
+            </span>
+        {% endif %}
+    </div>
+    Saved Tips
+    {% if unread_tips > 0 %}
+        <span class="nav-badge-pill pill-warning">
+            {{ unread_tips }}
+        </span>
+    {% endif %}
+</a>
+
+<a href="{{ url_for('goals') }}"
+   class="nav-item {% if request.endpoint == 'goals' %}active{% endif %}">
+    <div class="nav-icon">🎯</div>
+    Goals
+</a>
+
+               <div class="nav-section-label" style="margin-top:8px">Reports</div>
+
+<a href="{{ url_for('alerts') }}"
+   class="nav-item {% if request.endpoint == 'alerts' %}active{% endif %}">
+    <div class="nav-icon">
+        ⚠️
+        {% if alert_count > 0 %}
+            <span class="nav-badge nav-badge-danger">{{ alert_count }}</span>
+        {% elif warning_count > 0 %}
+            <span class="nav-badge nav-badge-warning">{{ warning_count }}</span>
+        {% endif %}
+    </div>
+    Alerts
+    {% if alert_count > 0 or warning_count > 0 %}
+        <span class="nav-badge-pill
+            {{ 'pill-danger' if alert_count > 0 else 'pill-warning' }}">
+            {{ alert_count + warning_count }}
+        </span>
+    {% endif %}
+</a>
+
+<a href="{{ url_for('reports') }}"
+   class="nav-item {% if request.endpoint == 'reports' %}active{% endif %}">
+    <div class="nav-icon">📁</div>
+    Reports
+</a>
+
+                <div class="nav-section-label" style="margin-top:8px">Account</div>
+
+                <a href="{{ url_for('profile') }}"
+                   class="nav-item {% if request.endpoint == 'profile' %}active{% endif %}">
+                    <div class="nav-icon">👤</div>
+                    My Profile
+                </a>
+
+                <a href="{{ url_for('logout') }}" class="nav-item">
+                    <div class="nav-icon">🚪</div>
+                    Logout
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="{{ url_for('profile') }}" class="sidebar-user">
+                    <div class="user-avatar">
+                        {{ session.username[0]|upper }}
+                    </div>
+                    <div class="user-info">
+                        <div class="user-name">{{ session.username }}</div>
+                        <div class="user-role">Personal account</div>
+                    </div>
+                </a>
+            </div>
+        </aside>
+
+        <!-- CONTENT AREA -->
+        <div class="content-area">
+
+            <!-- TOP BAR -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <span class="page-title">
+                        {% if request.endpoint == 'dashboard' %}📊 Dashboard
+                        {% elif request.endpoint in ['expenses','edit_expense'] %}💸 Expenses
+                        {% elif request.endpoint in ['budgets','edit_budget'] %}💼 Budgets
+                        {% elif request.endpoint == 'recurring' %}🔁 Recurring
+                        {% elif request.endpoint == 'alerts' %}⚠️ Alerts
+                        {% elif request.endpoint == 'reports' %}📁 Reports
+                        {% elif request.endpoint == 'profile' %}👤 Profile
+                        {% elif request.endpoint == 'ai_advisor' %}🤖 AI Advisor
+                        {% elif request.endpoint in ['ai_chat','ai_chat_new'] %}💬 AI Chat
+                        {% else %}💰 Expense Analyser
+                        {% endif %}
+                    </span>
+                </div>
+
+                <!-- LIVE SEARCH -->
+                <div class="search-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input
+                        type="text"
+                        id="liveSearch"
+                        class="search-input"
+                        placeholder="Search expenses..."
+                        autocomplete="off"
+                    >
+                    <div class="search-results" id="searchResults"></div>
+                </div>
+
+               <div class="topbar-right">
+
+    <!-- Notification Bell -->
+    {% if alert_count > 0 or warning_count > 0 %}
+    <a href="{{ url_for('alerts') }}" class="notif-bell"
+       title="{{ alert_count }} over budget, {{ warning_count }} warnings">
+        🔔
+        <span class="notif-dot
+            {{ 'notif-danger' if alert_count > 0 else 'notif-warning' }}">
+            {{ alert_count + warning_count }}
+        </span>
+    </a>
+    {% else %}
+    <a href="{{ url_for('alerts') }}" class="notif-bell notif-quiet" title="No alerts">
+        🔕
+    </a>
+    {% endif %}
+
+    <a href="{{ url_for('expenses') }}"
+       class="topbar-btn btn-add-expense">
+        ＋ Add Expense
+    </a>
+</div>
+            </header>
+
+            <!-- FLASH MESSAGES -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container" style="padding:12px 28px 0">
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">
+                            {{ '✅' if category == 'success' else '❌' }}
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <!-- PAGE CONTENT -->
+            <main class="page-content">
+                {% block content %}{% endblock %}
+            </main>
+
+        </div>
+    </div>
+
+{% else %}
+
+    <!-- ══ NOT LOGGED IN — auth pages ══ -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div style="position:fixed;top:16px;right:16px;z-index:9999;min-width:280px">
+            {% for category, message in messages %}
+                <div class="flash flash-{{ category }}" style="margin-bottom:8px">
+                    {{ '✅' if category == 'success' else '❌' }}
+                    {{ message }}
+                </div>
+            {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    {% block auth_content %}{% endblock %}
+
+{% endif %}
+
+<script src="{{ url_for('static', filename='js/search.js') }}"></script>
+
+</body>
+</html>

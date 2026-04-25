@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1>📁 Expense Reports</h1>
+    <p>Filter by date range and export your data</p>
+</div>
+
+<!-- ── FILTER FORM ────────────────────────────── -->
+<div class="section-card">
+    <h3>🔍 Filter Report</h3>
+    <form action="/reports" method="GET" class="report-filter-form">
+
+        <div class="report-filter-row">
+
+            <div class="form-group">
+                <label>From Date</label>
+                <input type="date" name="from_date"
+                       value="{{ from_date }}" required>
+            </div>
+
+            <div class="form-group">
+                <label>To Date</label>
+                <input type="date" name="to_date"
+                       value="{{ to_date }}" required>
+            </div>
+
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category">
+                    <option value="">All Categories</option>
+                    {% set categories = ['Food','Transport','Shopping',
+                       'Entertainment','Health','Education',
+                       'Rent','Utilities','Other'] %}
+                    {% for cat in categories %}
+                        <option value="{{ cat }}"
+                            {% if filter_category == cat %}selected{% endif %}>
+                            {{ cat }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group filter-btn-group">
+                <label>&nbsp;</label>
+                <div style="display:flex; gap:8px;">
+                    <button type="submit" class="btn btn-filter">
+                        🔍 Generate
+                    </button>
+                    <a href="{{ url_for('reports') }}" class="btn btn-clear">
+                        ✖ Reset
+                    </a>
+                </div>
+            </div>
+
+        </div>
+    </form>
+</div>
+
+<!-- ── SUMMARY CARDS ──────────────────────────── -->
+<div class="summary-cards" style="grid-template-columns: repeat(3,1fr);">
+
+    <div class="summary-card card-blue">
+        <div class="card-icon">💰</div>
+        <div class="card-info">
+            <p class="card-label">Total Budget</p>
+            <p class="card-value">₹{{ "%.2f"|format(total_budget) }}</p>
+        </div>
+    </div>
+
+    <div class="summary-card card-red">
+        <div class="card-icon">💸</div>
+        <div class="card-info">
+            <p class="card-label">Total Spent</p>
+            <p class="card-value">₹{{ "%.2f"|format(total_spent) }}</p>
+        </div>
+    </div>
+
+    <div class="summary-card {{ 'card-orange' if remaining < 0 else 'card-green' }}">
+        <div class="card-icon">{{ '🔴' if remaining < 0 else '✅' }}</div>
+        <div class="card-info">
+            <p class="card-label">
+                {{ 'Over Budget' if remaining < 0 else 'Remaining' }}
+            </p>
+            <p class="card-value">₹{{ "%.2f"|format(remaining|abs) }}</p>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── DAILY TREND CHART ───────────────────────── -->
+{% if daily_trend %}
+<div class="section-card">
+    <h3>📈 Daily Spending — {{ from_date }} to {{ to_date }}</h3>
+    <canvas id="dailyChart" height="100"></canvas>
+</div>
+{% endif %}
+
+<!-- ── CATEGORY SUMMARY TABLE ─────────────────── -->
+{% if category_summary %}
+<div class="section-card">
+    <div class="section-header">
+        <h3>📊 Category Breakdown</h3>
+        <!-- CSV Export button — passes same filters -->
+        <a href="/reports/export?from_date={{ from_date }}&to_date={{ to_date }}&category={{ filter_category }}"
+           class="export-btn">
+            ⬇️ Export CSV
+        </a>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Transactions</th>
+                <th>Total Spent</th>
+                <th>Average</th>
+                <th>Highest</th>
+                <th>Lowest</th>
+                <th>% of Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cat in category_summary %}
+            <tr>
+                <td>
+                    {% if cat.category == 'Food' %}🍔
+                    {% elif cat.category == 'Transport' %}🚗
+                    {% elif cat.category == 'Shopping' %}🛍️
+                    {% elif cat.category == 'Entertainment' %}🎬
+                    {% elif cat.category == 'Health' %}💊
+                    {% elif cat.category == 'Education' %}📚
+                    {% elif cat.category == 'Rent' %}🏠
+                    {% elif cat.category == 'Utilities' %}💡
+                    {% else %}📦{% endif %}
+                    {{ cat.category }}
+                </td>
+                <td>{{ cat.count }}</td>
+                <td class="amount">₹{{ "%.2f"|format(cat.total) }}</td>
+                <td>₹{{ "%.2f"|format(cat.average) }}</td>
+                <td>₹{{ "%.2f"|format(cat.highest) }}</td>
+                <td>₹{{ "%.2f"|format(cat.lowest) }}</td>
+                <td>
+                    {% if total_spent > 0 %}
+                        {% set pct = (cat.total / total_spent * 100)|round(1) %}
+                        <div class="pct-bar-wrap">
+                            <div class="pct-bar-fill"
+                                 style="width:{{ pct }}%"></div>
+                            <span>{{ pct }}%</span>
+                        </div>
+                    {% else %}
+                        —
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td><strong>
+                    {{ category_summary|sum(attribute='count') }}
+                </strong></td>
+                <td class="amount"><strong>
+                    ₹{{ "%.2f"|format(total_spent) }}
+                </strong></td>
+                <td colspan="4"></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endif %}
+
+<!-- ── FULL EXPENSE LIST ───────────────────────── -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>🧾 All Expenses
+            <span class="count-badge">
+                {{ filtered_expenses|length }} records
+            </span>
+        </h3>
+        {% if filtered_expenses %}
+        <a href="/reports/export?from_date={{ from_date }}&to_date={{ to_date }}&category={{ filter_category }}"
+           class="export-btn">
+            ⬇️ Export CSV
+        </a>
+        {% endif %}
+    </div>
+
+    {% if filtered_expenses %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Date</th>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in filtered_expenses %}
+            <tr>
+                <td class="muted-text">{{ loop.index }}</td>
+                <td>
+                    {% if e['category'] == 'Food' %}🍔
+                    {% elif e['category'] == 'Transport' %}🚗
+                    {% elif e['category'] == 'Shopping' %}🛍️
+                    {% elif e['category'] == 'Entertainment' %}🎬
+                    {% elif e['category'] == 'Health' %}💊
+                    {% elif e['category'] == 'Education' %}📚
+                    {% elif e['category'] == 'Rent' %}🏠
+                    {% elif e['category'] == 'Utilities' %}💡
+                    {% else %}📦{% endif %}
+                    {{ e['category'] }}
+                </td>
+                <td class="amount">₹{{ "%.2f"|format(e['amount']) }}</td>
+                <td>{{ e['date'] }}</td>
+                <td class="note-cell">
+                    {{ e['note'] if e['note'] else '—' }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% else %}
+    <div class="empty-state">
+        <p>😕 No expenses found for selected filters.</p>
+        <p>Try changing the date range or category.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── PASS DATA TO CHART ──────────────────────── -->
+<script>
+    const dailyTrend = {{ daily_trend | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+
+{% endblock %}

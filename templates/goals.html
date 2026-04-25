@@ -1,0 +1,326 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>🎯 Savings Goals</h1>
+        <p>Set targets, track progress, get AI-powered plans to reach them</p>
+    </div>
+</div>
+
+<!-- ── SUMMARY CARDS ──────────────────────── -->
+<div class="summary-cards" style="grid-template-columns:repeat(3,1fr);
+                                  margin-bottom:24px">
+    <div class="summary-card card-blue">
+        <div class="card-icon-wrap icon-blue">🎯</div>
+        <div>
+            <div class="card-label">Active Goals</div>
+            <div class="card-value">{{ active_goals|length }}</div>
+        </div>
+    </div>
+    <div class="summary-card card-green">
+        <div class="card-icon-wrap icon-green">✅</div>
+        <div>
+            <div class="card-label">Total Saved</div>
+            <div class="card-value">₹{{ "%.0f"|format(total_saved) }}</div>
+        </div>
+    </div>
+    <div class="summary-card card-purple">
+        <div class="card-icon-wrap icon-purple">🏆</div>
+        <div>
+            <div class="card-label">Completed</div>
+            <div class="card-value">{{ completed_goals|length }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="budget-layout">
+
+    <!-- ── LEFT: ADD GOAL FORM ────────────── -->
+    <div class="form-card">
+        <h2>➕ New Savings Goal</h2>
+
+        <form action="/goals/add" method="POST">
+
+            <div class="form-group">
+                <label>Goal Title</label>
+                <input type="text" name="title"
+                       placeholder="e.g. New Phone, Trip to Goa"
+                       required>
+            </div>
+
+            <div class="form-group">
+                <label>Target Amount (₹)</label>
+                <input type="number" name="target_amount"
+                       placeholder="e.g. 15000"
+                       min="1" step="0.01" required>
+            </div>
+
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category">
+                    <option value="General">📦 General</option>
+                    <option value="Electronics">📱 Electronics</option>
+                    <option value="Travel">✈️ Travel</option>
+                    <option value="Education">📚 Education</option>
+                    <option value="Health">💊 Health</option>
+                    <option value="Emergency">🆘 Emergency Fund</option>
+                    <option value="Other">🎁 Other</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>
+                    Target Date
+                    <span style="color:var(--text-muted);
+                                 font-weight:400">(optional)</span>
+                </label>
+                <input type="date" name="deadline">
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                🎯 Create Goal
+            </button>
+        </form>
+
+        <!-- Tips about goals -->
+        <div class="info-box" style="margin-top:18px">
+            <p>💡 How Goals Work</p>
+            <ul>
+                <li>Set a savings target amount</li>
+                <li>Add money whenever you save</li>
+                <li>Get AI advice on how to reach it faster</li>
+                <li>Goal auto-completes when target is reached</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- ── RIGHT: GOALS LIST ──────────────── -->
+    <div>
+
+        <!-- Active Goals -->
+        {% if active_goals %}
+        <div class="list-card" style="margin-bottom:20px">
+            <h2>🎯 Active Goals</h2>
+
+            <div class="goals-grid">
+                {% for g in active_goals %}
+                {% set pct = [(g['saved_amount'] / g['target_amount'] * 100), 100]|min
+                             if g['target_amount'] > 0 else 0 %}
+                {% set remaining = g['target_amount'] - g['saved_amount'] %}
+
+                <div class="goal-card">
+
+                    <!-- Goal header -->
+                    <div class="goal-header">
+                        <div class="goal-icon">
+                            {% if g['category'] == 'Electronics' %}📱
+                            {% elif g['category'] == 'Travel' %}✈️
+                            {% elif g['category'] == 'Education' %}📚
+                            {% elif g['category'] == 'Health' %}💊
+                            {% elif g['category'] == 'Emergency' %}🆘
+                            {% else %}🎯{% endif %}
+                        </div>
+                        <div class="goal-title-wrap">
+                            <div class="goal-title">{{ g['title'] }}</div>
+                            <div class="goal-category">
+                                {{ g['category'] }}
+                            </div>
+                        </div>
+                        <div class="goal-pct-badge">{{ "%.0f"|format(pct) }}%</div>
+                    </div>
+
+                    <!-- Progress bar -->
+                    <div class="goal-progress-bg">
+                        <div class="goal-progress-fill
+                            {{ 'fill-success' if pct >= 100
+                               else 'fill-warning' if pct >= 60
+                               else 'fill-danger' }}"
+                             style="width:{{ pct }}%">
+                        </div>
+                    </div>
+
+                    <!-- Amounts -->
+                    <div class="goal-amounts">
+                        <div class="goal-saved">
+                            <span class="gl">Saved</span>
+                            <span class="gv success-text">
+                                ₹{{ "%.0f"|format(g['saved_amount']) }}
+                            </span>
+                        </div>
+                        <div class="goal-target">
+                            <span class="gl">Target</span>
+                            <span class="gv">
+                                ₹{{ "%.0f"|format(g['target_amount']) }}
+                            </span>
+                        </div>
+                        <div class="goal-remaining">
+                            <span class="gl">Remaining</span>
+                            <span class="gv danger-text">
+                                ₹{{ "%.0f"|format(remaining) }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Deadline -->
+                    {% if g['deadline'] %}
+                    <div class="goal-deadline">
+                        📅 Target: {{ g['deadline'] }}
+                    </div>
+                    {% endif %}
+
+                    <!-- AI Advice (if exists) -->
+                    {% if g['ai_advice'] %}
+                    <div class="goal-ai-advice" id="advice-{{ g['id'] }}">
+                        <div class="advice-header">🤖 AI Plan</div>
+                        <div class="advice-text">{{ g['ai_advice'] }}</div>
+                    </div>
+                    {% else %}
+                    <div class="goal-ai-advice"
+                         id="advice-{{ g['id'] }}"
+                         style="display:none"></div>
+                    {% endif %}
+
+                    <!-- Actions -->
+                    <div class="goal-actions">
+
+                        <!-- Add money form -->
+                        <form action="/goals/deposit/{{ g['id'] }}"
+                              method="POST"
+                              class="deposit-form">
+                            <input type="number"
+                                   name="amount"
+                                   placeholder="₹ Add"
+                                   min="1" step="0.01"
+                                   class="deposit-input">
+                            <button type="submit"
+                                    class="deposit-btn">
+                                ➕
+                            </button>
+                        </form>
+
+                        <!-- AI Advice button -->
+                        <button class="goal-ai-btn"
+                                onclick="getGoalAdvice({{ g['id'] }}, this)"
+                                id="ai-btn-{{ g['id'] }}">
+                            🤖 AI Plan
+                        </button>
+
+                        <!-- Cancel -->
+                        <a href="/goals/cancel/{{ g['id'] }}"
+                           class="goal-cancel-btn"
+                           onclick="return confirm('Cancel this goal?')"
+                           title="Cancel goal">✕</a>
+
+                        <!-- Delete -->
+                        <a href="/goals/delete/{{ g['id'] }}"
+                           class="goal-delete-btn"
+                           onclick="return confirm('Delete this goal?')"
+                           title="Delete goal">🗑️</a>
+                    </div>
+
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Completed Goals -->
+        {% if completed_goals %}
+        <div class="list-card">
+            <h2>🏆 Completed Goals</h2>
+            <div class="goals-grid">
+                {% for g in completed_goals %}
+                <div class="goal-card goal-completed">
+                    <div class="goal-header">
+                        <div class="goal-icon">🏆</div>
+                        <div class="goal-title-wrap">
+                            <div class="goal-title">{{ g['title'] }}</div>
+                            <div class="goal-category">
+                                ₹{{ "%.0f"|format(g['target_amount']) }} achieved!
+                            </div>
+                        </div>
+                        <span class="status-badge status-active">Done!</span>
+                    </div>
+                    <div class="goal-progress-bg">
+                        <div class="goal-progress-fill fill-success"
+                             style="width:100%"></div>
+                    </div>
+                    <div style="display:flex;justify-content:flex-end;
+                                margin-top:10px">
+                        <a href="/goals/delete/{{ g['id'] }}"
+                           class="goal-delete-btn"
+                           onclick="return confirm('Delete?')">🗑️</a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Empty state -->
+        {% if not active_goals and not completed_goals %}
+        <div class="list-card">
+            <div class="empty-state" style="padding:50px">
+                <p style="font-size:3rem">🎯</p>
+                <p style="font-size:1.1rem;font-weight:700;
+                          color:var(--text-primary);margin-top:12px">
+                    No goals yet!
+                </p>
+                <p style="color:var(--text-secondary);margin-top:8px">
+                    Create your first savings goal using the form.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<script>
+async function getGoalAdvice(goalId, btn) {
+    const adviceDiv = document.getElementById(`advice-${goalId}`);
+
+    btn.textContent = '⏳ Thinking...';
+    btn.disabled    = true;
+    adviceDiv.style.display = 'block';
+    adviceDiv.innerHTML = `
+        <div class="advice-header">🤖 AI Plan</div>
+        <div style="display:flex;align-items:center;gap:8px;
+                    padding:8px 0;color:var(--text-muted);font-size:0.83rem">
+            <div class="ai-spinner"></div> Generating your plan...
+        </div>`;
+
+    try {
+        const res  = await fetch(`/goals/ai-advice/${goalId}`,
+                                 { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+            adviceDiv.innerHTML = `
+                <div class="advice-header">🤖 AI Plan</div>
+                <div class="advice-text">${data.advice}</div>`;
+            btn.textContent = '🔄 Refresh Plan';
+        } else {
+            adviceDiv.innerHTML = `
+                <div class="advice-header">🤖 AI Plan</div>
+                <div class="advice-text" style="color:var(--danger)">
+                    ❌ ${data.error || 'Could not generate plan.'}
+                </div>`;
+            btn.textContent = '🤖 AI Plan';
+        }
+    } catch(e) {
+        adviceDiv.innerHTML = `
+            <div class="advice-header">🤖 AI Plan</div>
+            <div class="advice-text" style="color:var(--danger)">
+                ❌ Connection failed.
+            </div>`;
+        btn.textContent = '🤖 AI Plan';
+    }
+
+    btn.disabled = false;
+}
+</script>
+
+{% endblock %}

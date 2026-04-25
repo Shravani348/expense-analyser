@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💸 Expense Tracking</h1>
+    <p>Add and manage all your daily expenses</p>
+</div>
+
+<div class="budget-layout">
+
+    <!-- ── LEFT: ADD / EDIT FORM ─────────────────── -->
+    <div class="form-card">
+
+        {% if edit_expense %}
+            <h2>✏️ Edit Expense</h2>
+            <form action="/expenses/update/{{ edit_expense['id'] }}" method="POST">
+        {% else %}
+            <h2>➕ Add New Expense</h2>
+            <form action="/expenses/add" method="POST">
+        {% endif %}
+
+            <!-- Category -->
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category" required>
+                    <option value="">-- Select Category --</option>
+                    {% set categories = ['Food', 'Transport', 'Shopping', 'Entertainment',
+                                         'Health', 'Education', 'Rent', 'Utilities', 'Other'] %}
+                    {% for cat in categories %}
+                        <option value="{{ cat }}"
+                            {% if edit_expense and edit_expense['category'] == cat %}selected{% endif %}>
+                            {{ cat }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Amount -->
+            <div class="form-group">
+                <label>Amount (₹)</label>
+                <input
+                    type="number"
+                    name="amount"
+                    placeholder="e.g. 250"
+                    min="1"
+                    step="0.01"
+                    value="{{ edit_expense['amount'] if edit_expense else '' }}"
+                    required
+                >
+            </div>
+
+            <!-- Date -->
+            <div class="form-group">
+                <label>Date</label>
+                <input
+                    type="date"
+                    name="date"
+                    value="{{ edit_expense['date'] if edit_expense else '' }}"
+                    required
+                >
+            </div>
+
+            <!-- Note (optional) -->
+            <div class="form-group">
+                <label>Note <span style="color:#aaa">(optional)</span></label>
+                <input
+                    type="text"
+                    name="note"
+                    placeholder="e.g. Lunch at restaurant"
+                    value="{{ edit_expense['note'] if edit_expense and edit_expense['note'] else '' }}"
+                >
+            </div>
+
+            {% if edit_expense %}
+                <button type="submit" class="btn btn-primary">💾 Update Expense</button>
+                <a href="{{ url_for('expenses') }}" class="btn btn-secondary">✖ Cancel</a>
+            {% else %}
+                <button type="submit" class="btn btn-primary">➕ Add Expense</button>
+            {% endif %}
+
+        </form>
+    </div>
+
+    <!-- ── RIGHT: EXPENSES LIST ───────────────────── -->
+    <div class="list-card">
+
+        <!-- FILTER BAR -->
+        <div class="filter-bar">
+            <h2>📋 Your Expenses</h2>
+            <form action="/expenses" method="GET" class="filter-form">
+                <select name="category">
+                    <option value="">All Categories</option>
+                    {% set categories = ['Food', 'Transport', 'Shopping', 'Entertainment',
+                                         'Health', 'Education', 'Rent', 'Utilities', 'Other'] %}
+                    {% for cat in categories %}
+                        <option value="{{ cat }}"
+                            {% if filter_category == cat %}selected{% endif %}>
+                            {{ cat }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <select name="month">
+                    <option value="">All Months</option>
+                    {% set months = ['January','February','March','April','May','June',
+                                     'July','August','September','October','November','December'] %}
+                    {% for i in range(1, 13) %}
+                        <option value="{{ i }}"
+                            {% if filter_month == i %}selected{% endif %}>
+                            {{ months[i-1] }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+                <input
+                    type="number"
+                    name="year"
+                    value="{{ filter_year }}"
+                    min="2020"
+                    max="2100"
+                    style="width:90px"
+                >
+
+                <button type="submit" class="btn btn-filter">🔍 Filter</button>
+                <a href="{{ url_for('expenses') }}" class="btn btn-clear">✖ Clear</a>
+            </form>
+        </div>
+
+        <!-- TOTAL SUMMARY BAR -->
+        {% if expenses %}
+        <div class="total-bar">
+            <span>{{ expenses|length }} expense(s) found</span>
+            <span class="total-amount">Total: ₹{{ "%.2f"|format(total_spent) }}</span>
+        </div>
+        {% endif %}
+
+        <!-- EXPENSES TABLE -->
+        {% if expenses %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>Amount (₹)</th>
+                    <th>Date</th>
+                    <th>Note</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for e in expenses %}
+                <tr {% if edit_expense and edit_expense['id'] == e['id'] %}class="editing-row"{% endif %}>
+                    <td>
+                        {% if e['category'] == 'Food' %}🍔
+                        {% elif e['category'] == 'Transport' %}🚗
+                        {% elif e['category'] == 'Shopping' %}🛍️
+                        {% elif e['category'] == 'Entertainment' %}🎬
+                        {% elif e['category'] == 'Health' %}💊
+                        {% elif e['category'] == 'Education' %}📚
+                        {% elif e['category'] == 'Rent' %}🏠
+                        {% elif e['category'] == 'Utilities' %}💡
+                        {% else %}📦{% endif %}
+                        {{ e['category'] }}
+                    </td>
+                    <td class="amount">₹{{ "%.2f"|format(e['amount']) }}</td>
+                    <td>{{ e['date'] }}</td>
+                    <td class="note-cell">
+                        {{ e['note'] if e['note'] else '—' }}
+                    </td>
+                    <td class="action-btns">
+                        <a href="/expenses/edit/{{ e['id'] }}" class="btn-edit">✏️</a>
+                        <a href="/expenses/delete/{{ e['id'] }}"
+                           class="btn-delete"
+                           onclick="return confirm('Delete this expense?')">🗑️</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% else %}
+        <div class="empty-state">
+            <p>😕 No expenses found.</p>
+            <p>Try changing the filters or add a new expense!</p>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

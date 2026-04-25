@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<!-- ── PAGE HEADER ───────────────────────────── -->
+<div class="dash-header">
+    <div>
+        <h1>📊 Dashboard</h1>
+        <p>Welcome back, <strong>{{ username }}</strong>! 
+           Here's your summary for 
+           {{ ['','January','February','March','April','May','June',
+               'July','August','September','October','November',
+               'December'][current_month] }} {{ current_year }}
+        </p>
+    </div>
+    <div class="dash-actions">
+        <a href="{{ url_for('expenses') }}" class="btn btn-primary" 
+           style="width:auto; padding: 10px 20px; text-decoration:none">
+            ➕ Add Expense
+        </a>
+    </div>
+</div>
+
+<!-- ── OVER BUDGET ALERTS ─────────────────────── -->
+{% if alerts %}
+<div class="alerts-section">
+    {% for alert in alerts %}
+    <div class="alert-card">
+        ⚠️ <strong>{{ alert.category }}</strong> is over budget by
+        <strong>₹{{ "%.2f"|format(alert.over_by) }}</strong>
+        (Spent ₹{{ "%.2f"|format(alert.spent) }} 
+         / Budget ₹{{ "%.2f"|format(alert.budget) }})
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ── SUMMARY CARDS ROW ──────────────────────── -->
+<div class="summary-cards">
+
+    <div class="summary-card card-blue">
+        <div class="card-icon">💰</div>
+        <div class="card-info">
+            <p class="card-label">Total Budget</p>
+            <p class="card-value">₹{{ "%.2f"|format(total_budget) }}</p>
+        </div>
+    </div>
+
+    <div class="summary-card card-red">
+        <div class="card-icon">💸</div>
+        <div class="card-info">
+            <p class="card-label">Total Spent</p>
+            <p class="card-value">₹{{ "%.2f"|format(total_spent) }}</p>
+        </div>
+    </div>
+
+    <div class="summary-card {{ 'card-orange' if remaining < 0 else 'card-green' }}">
+        <div class="card-icon">{{ '🔴' if remaining < 0 else '✅' }}</div>
+        <div class="card-info">
+            <p class="card-label">{{ 'Over Budget' if remaining < 0 else 'Remaining' }}</p>
+            <p class="card-value">₹{{ "%.2f"|format(remaining|abs) }}</p>
+        </div>
+    </div>
+
+    <div class="summary-card card-purple">
+        <div class="card-icon">🧾</div>
+        <div class="card-info">
+            <p class="card-label">Total Expenses</p>
+            <p class="card-value">{{ total_expense_count }}</p>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── OVERALL PROGRESS BAR ───────────────────── -->
+{% if total_budget > 0 %}
+<div class="progress-section">
+    <div class="progress-header">
+        <span>Overall Budget Used</span>
+        <span class="{{ 'danger-text' if spent_percent > 100 else '' }}">
+            {{ spent_percent }}%
+        </span>
+    </div>
+    <div class="progress-bar-bg">
+        <div class="progress-bar-fill 
+            {{ 'fill-danger' if spent_percent > 100 
+               else 'fill-warning' if spent_percent > 80 
+               else 'fill-success' }}"
+             style="width: {{ [spent_percent, 100]|min }}%">
+        </div>
+    </div>
+    <div class="progress-labels">
+        <span>₹0</span>
+        <span>₹{{ "%.0f"|format(total_budget) }}</span>
+    </div>
+</div>
+{% endif %}
+
+<!-- ── CHARTS ROW ─────────────────────────────── -->
+<div class="charts-row">
+
+    <!-- PIE CHART — Category Breakdown -->
+    <div class="chart-card">
+        <h3>🥧 Spending by Category</h3>
+        {% if category_data %}
+            <canvas id="pieChart" height="260"></canvas>
+        {% else %}
+            <div class="empty-state">No expenses this month yet.</div>
+        {% endif %}
+    </div>
+
+    <!-- BAR CHART — Monthly Trend -->
+    <div class="chart-card">
+        <h3>📈 Monthly Spending Trend</h3>
+        {% if monthly_trend %}
+            <canvas id="barChart" height="260"></canvas>
+        {% else %}
+            <div class="empty-state">No expense history yet.</div>
+        {% endif %}
+    </div>
+
+</div>
+
+<!-- ── CATEGORY BUDGET VS SPENT TABLE ────────── -->
+{% if category_data %}
+<div class="section-card">
+    <h3>💼 Budget vs Spent — This Month</h3>
+    <div class="category-grid">
+        {% for cat, data in category_data.items() %}
+        <div class="category-row">
+            <div class="cat-header">
+                <span>
+                    {% if cat == 'Food' %}🍔
+                    {% elif cat == 'Transport' %}🚗
+                    {% elif cat == 'Shopping' %}🛍️
+                    {% elif cat == 'Entertainment' %}🎬
+                    {% elif cat == 'Health' %}💊
+                    {% elif cat == 'Education' %}📚
+                    {% elif cat == 'Rent' %}🏠
+                    {% elif cat == 'Utilities' %}💡
+                    {% else %}📦{% endif %}
+                    {{ cat }}
+                </span>
+                <span>
+                    ₹{{ "%.2f"|format(data.spent) }}
+                    {% if data.budget > 0 %}
+                        / ₹{{ "%.2f"|format(data.budget) }}
+                    {% else %}
+                        <small style="color:#aaa">(no budget set)</small>
+                    {% endif %}
+                </span>
+            </div>
+            {% if data.budget > 0 %}
+                {% set pct = [(data.spent / data.budget * 100), 100]|min %}
+                <div class="mini-bar-bg">
+                    <div class="mini-bar-fill
+                        {{ 'fill-danger' if data.spent > data.budget
+                           else 'fill-warning' if (data.spent / data.budget) > 0.8
+                           else 'fill-success' }}"
+                         style="width: {{ pct }}%">
+                    </div>
+                </div>
+                <small class="{{ 'danger-text' if data.spent > data.budget else 'muted-text' }}">
+                    {% if data.spent > data.budget %}
+                        ⚠️ Over by ₹{{ "%.2f"|format(data.spent - data.budget) }}
+                    {% else %}
+                        ₹{{ "%.2f"|format(data.budget - data.spent) }} remaining
+                    {% endif %}
+                </small>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- ── RECENT EXPENSES ─────────────────────────── -->
+<div class="section-card">
+    <div class="section-header">
+        <h3>🕐 Recent Expenses</h3>
+        <a href="{{ url_for('expenses') }}" class="view-all-link">View All →</a>
+    </div>
+
+    {% if recent_expenses %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Date</th>
+                <th>Note</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in recent_expenses %}
+            <tr>
+                <td>
+                    {% if e['category'] == 'Food' %}🍔
+                    {% elif e['category'] == 'Transport' %}🚗
+                    {% elif e['category'] == 'Shopping' %}🛍️
+                    {% elif e['category'] == 'Entertainment' %}🎬
+                    {% elif e['category'] == 'Health' %}💊
+                    {% elif e['category'] == 'Education' %}📚
+                    {% elif e['category'] == 'Rent' %}🏠
+                    {% elif e['category'] == 'Utilities' %}💡
+                    {% else %}📦{% endif %}
+                    {{ e['category'] }}
+                </td>
+                <td class="amount">₹{{ "%.2f"|format(e['amount']) }}</td>
+                <td>{{ e['date'] }}</td>
+                <td class="note-cell">{{ e['note'] if e['note'] else '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No expenses yet. <a href="{{ url_for('expenses') }}">Add your first one!</a></p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ── PASS DATA TO CHART.JS ───────────────────── -->
+<script>
+    // Pass Python data → JavaScript safely using tojson filter
+    const categoryData  = {{ category_data  | tojson }};
+    const monthlyTrend  = {{ monthly_trend  | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+
+{% endblock %}

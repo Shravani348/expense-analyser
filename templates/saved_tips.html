@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>🔖 Saved Tips</h1>
+        <p>AI tips you saved — your personal financial wisdom collection</p>
+    </div>
+    <a href="{{ url_for('ai_advisor') }}"
+       class="topbar-btn btn-add-expense"
+       style="text-decoration:none">
+        🤖 Get More Tips
+    </a>
+</div>
+
+{% if tips %}
+
+<!-- ── STATS ROW ──────────────────────────── -->
+<div class="summary-cards" style="grid-template-columns:repeat(3,1fr);
+                                  margin-bottom:24px">
+    <div class="summary-card card-purple" style="background:
+         linear-gradient(135deg,#6c63ff,#5a52d5)">
+        <div class="card-icon-wrap icon-purple">📚</div>
+        <div>
+            <div class="card-label" style="color:rgba(255,255,255,0.7)">
+                Total Saved
+            </div>
+            <div class="card-value" style="color:white">
+                {{ tips|length }}
+            </div>
+        </div>
+    </div>
+
+    <div class="summary-card" style="background:
+         linear-gradient(135deg,#10b981,#059669)">
+        <div class="card-icon-wrap">💬</div>
+        <div>
+            <div class="card-label" style="color:rgba(255,255,255,0.7)">
+                From Chat
+            </div>
+            <div class="card-value" style="color:white">
+                {{ tips|selectattr('source','eq','chat')|list|length }}
+            </div>
+        </div>
+    </div>
+
+    <div class="summary-card" style="background:
+         linear-gradient(135deg,#f59e0b,#d97706)">
+        <div class="card-icon-wrap">🤖</div>
+        <div>
+            <div class="card-label" style="color:rgba(255,255,255,0.7)">
+                From Advisor
+            </div>
+            <div class="card-value" style="color:white">
+                {{ tips|selectattr('source','eq','advisor')|list|length }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── TIPS LIST ──────────────────────────── -->
+<div class="section-card">
+    <div class="tips-saved-list">
+        {% for tip in tips %}
+        <div class="saved-tip-item">
+            <div class="saved-tip-icon">
+                {{ '💬' if tip['source'] == 'chat' else '🤖' }}
+            </div>
+            <div class="saved-tip-body">
+                <div class="saved-tip-text">{{ tip['tip_text'] }}</div>
+                <div class="saved-tip-meta">
+                    <span class="source-badge
+                        {{ 'badge-chat' if tip['source'] == 'chat'
+                           else 'badge-advisor' }}">
+                        {{ 'AI Chat' if tip['source'] == 'chat'
+                           else 'AI Advisor' }}
+                    </span>
+                    <span class="saved-tip-date">
+                        {{ tip['created_at'][:10] }}
+                    </span>
+                </div>
+            </div>
+            <a href="{{ url_for('delete_tip', tip_id=tip['id']) }}"
+               class="saved-tip-delete"
+               onclick="return confirm('Delete this tip?')"
+               title="Delete">🗑️</a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% else %}
+<div class="section-card">
+    <div class="empty-state" style="padding:60px">
+        <p style="font-size:3rem">🔖</p>
+        <p style="font-size:1.1rem;font-weight:700;
+                  color:var(--text-primary);margin-top:12px">
+            No saved tips yet!
+        </p>
+        <p style="margin-top:8px;color:var(--text-secondary)">
+            Go to AI Advisor or AI Chat and click
+            the 🔖 Save button on any tip you like.
+        </p>
+        <a href="{{ url_for('ai_advisor') }}"
+           class="topbar-btn btn-add-expense"
+           style="display:inline-flex;margin-top:20px;text-decoration:none">
+            🤖 Get AI Tips
+        </a>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

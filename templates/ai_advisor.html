@@ -1,0 +1,382 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div class="page-header">
+    <div class="page-header-left">
+        <h1>🤖 AI Financial Advisor</h1>
+        <p>Powered by Google Gemini — personalized advice based on your real data</p>
+    </div>
+</div>
+
+{% if not has_data %}
+<!-- ── NO DATA STATE ───────────────────────── -->
+<div class="section-card">
+    <div class="empty-state" style="padding:60px">
+        <p style="font-size:3rem">📊</p>
+        <p style="font-size:1.1rem;font-weight:700;
+                  color:var(--text-primary);margin-top:12px">
+            No expense data yet!
+        </p>
+        <p style="margin-top:8px">
+            Add some expenses first so the AI has data to analyze.
+        </p>
+        <a href="{{ url_for('expenses') }}"
+           class="topbar-btn btn-add-expense"
+           style="display:inline-flex;margin-top:20px;text-decoration:none">
+            💸 Add Expenses
+        </a>
+    </div>
+</div>
+
+{% else %}
+
+<!-- ── TIP OF THE DAY ─────────────────────── -->
+<div class="ai-tip-banner" id="tipBanner">
+    <div class="tip-left">
+        <span class="tip-icon">💡</span>
+        <div>
+            <div class="tip-label">Tip of the day</div>
+            <div class="tip-text" id="tipText">
+                Click to get your personalized tip...
+            </div>
+        </div>
+    </div>
+    <button class="tip-btn" onclick="loadTip()" id="tipBtn">
+        ✨ Get Tip
+    </button>
+</div>
+
+<!-- ── 3 FEATURE CARDS ROW ────────────────── -->
+<div class="ai-features-grid">
+
+    <!-- Card 1: Monthly Analysis -->
+    <div class="ai-feature-card">
+        <div class="ai-card-header">
+            <div class="ai-card-icon">📊</div>
+            <div>
+                <div class="ai-card-title">Monthly Analysis</div>
+                <div class="ai-card-subtitle">
+                    {{ month_name }} {{ current_year }}
+                </div>
+            </div>
+        </div>
+
+        <p class="ai-card-desc">
+            Get 4 personalized saving tips based on your
+            actual spending vs budget this month.
+        </p>
+
+        <!-- Mini spending summary -->
+        <div class="ai-mini-summary">
+            {% for cat, data in spending_data.items() %}
+            <div class="ai-mini-row">
+                <span>
+                    {% if cat == 'Food' %}🍔
+                    {% elif cat == 'Transport' %}🚗
+                    {% elif cat == 'Shopping' %}🛍️
+                    {% elif cat == 'Entertainment' %}🎬
+                    {% elif cat == 'Health' %}💊
+                    {% elif cat == 'Education' %}📚
+                    {% elif cat == 'Rent' %}🏠
+                    {% elif cat == 'Utilities' %}💡
+                    {% else %}📦{% endif %}
+                    {{ cat }}
+                </span>
+                <span class="
+                    {% if data.budget > 0 and data.spent > data.budget %}
+                        ai-over
+                    {% else %}
+                        ai-ok
+                    {% endif %}
+                ">
+                    ₹{{ "%.0f"|format(data.spent) }}
+                    {% if data.budget > 0 %}
+                        / ₹{{ "%.0f"|format(data.budget) }}
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+
+        <button class="ai-action-btn btn-purple"
+                onclick="loadSpendingTips()"
+                id="spendingBtn">
+            🤖 Analyze My Spending
+        </button>
+
+        <!-- Results area -->
+        <div class="ai-results" id="spendingResults"></div>
+    </div>
+
+    <!-- Card 2: Category Deep Dive -->
+    <div class="ai-feature-card">
+        <div class="ai-card-header">
+            <div class="ai-card-icon">🔍</div>
+            <div>
+                <div class="ai-card-title">Category Deep Dive</div>
+                <div class="ai-card-subtitle">Pick any category</div>
+            </div>
+        </div>
+
+        <p class="ai-card-desc">
+            Select a spending category and get specific
+            advice on how to manage it better.
+        </p>
+
+        <div class="form-group" style="margin-bottom:14px">
+            <label>Choose Category</label>
+            <select id="categorySelect">
+                <option value="">-- Select a category --</option>
+                {% for cat in categories_with_data %}
+                <option value="{{ cat }}">
+                    {% if cat == 'Food' %}🍔
+                    {% elif cat == 'Transport' %}🚗
+                    {% elif cat == 'Shopping' %}🛍️
+                    {% elif cat == 'Entertainment' %}🎬
+                    {% elif cat == 'Health' %}💊
+                    {% elif cat == 'Education' %}📚
+                    {% elif cat == 'Rent' %}🏠
+                    {% elif cat == 'Utilities' %}💡
+                    {% else %}📦{% endif %}
+                    {{ cat }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button class="ai-action-btn btn-blue"
+                onclick="loadCategoryAdvice()"
+                id="categoryBtn">
+            🔍 Get Category Advice
+        </button>
+
+        <div class="ai-results" id="categoryResults"></div>
+    </div>
+
+    <!-- Card 3: Budget Recommendations -->
+    <div class="ai-feature-card">
+        <div class="ai-card-header">
+            <div class="ai-card-icon">💼</div>
+            <div>
+                <div class="ai-card-title">Budget Recommendations</div>
+                <div class="ai-card-subtitle">Based on your history</div>
+            </div>
+        </div>
+
+        <p class="ai-card-desc">
+            AI looks at your past spending patterns and
+            suggests realistic budgets for next month.
+        </p>
+
+        <!-- History preview -->
+        <div class="ai-mini-summary">
+            {% for item in history_data[:4] %}
+            <div class="ai-mini-row">
+                <span>{{ item.category }}</span>
+                <span class="ai-ok">
+                    avg ₹{{ "%.0f"|format(item.avg_spent) }}
+                </span>
+            </div>
+            {% endfor %}
+            {% if history_data|length > 4 %}
+            <div style="font-size:0.78rem;color:var(--text-muted);
+                        margin-top:4px;text-align:center">
+                + {{ history_data|length - 4 }} more categories
+            </div>
+            {% endif %}
+        </div>
+
+        <button class="ai-action-btn btn-green"
+                onclick="loadBudgetRec()"
+                id="budgetBtn">
+            💼 Recommend My Budget
+        </button>
+
+        <div class="ai-results" id="budgetResults"></div>
+    </div>
+
+</div>
+{% endif %}
+
+<!-- JavaScript for all AI calls -->
+<script>
+
+// ── Tip of the Day ────────────────────────────
+async function loadTip() {
+    const btn     = document.getElementById('tipBtn');
+    const tipText = document.getElementById('tipText');
+
+    btn.textContent     = '⏳ Loading...';
+    btn.disabled        = true;
+    tipText.textContent = 'Asking AI for your tip...';
+
+    try {
+        const res  = await fetch('/ai/savings-tip', { method: 'POST' });
+        const data = await res.json();
+
+        tipText.textContent = data.tip || 'Could not load tip.';
+        btn.textContent     = '🔄 New Tip';
+        btn.disabled        = false;
+    } catch(e) {
+        tipText.textContent = 'Failed to connect. Try again.';
+        btn.textContent     = '✨ Get Tip';
+        btn.disabled        = false;
+    }
+}
+
+
+// ── Monthly Spending Analysis ─────────────────
+async function loadSpendingTips() {
+    const btn     = document.getElementById('spendingBtn');
+    const results = document.getElementById('spendingResults');
+
+    btn.textContent  = '⏳ Analyzing...';
+    btn.disabled     = true;
+    results.innerHTML = renderLoading('Analyzing your spending...');
+
+    try {
+        const res  = await fetch('/ai/spending-tips', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success && data.tips.length > 0) {
+            results.innerHTML = renderTips(data.tips, 'purple');
+        } else {
+            results.innerHTML = renderError(data.error || 'No tips generated.');
+        }
+    } catch(e) {
+        results.innerHTML = renderError('Connection failed. Try again.');
+    }
+
+    btn.textContent = '🔄 Re-analyze';
+    btn.disabled    = false;
+}
+
+
+// ── Category Deep Dive ────────────────────────
+async function loadCategoryAdvice() {
+    const category = document.getElementById('categorySelect').value;
+    const btn      = document.getElementById('categoryBtn');
+    const results  = document.getElementById('categoryResults');
+
+    if (!category) {
+        results.innerHTML = renderError('Please select a category first!');
+        return;
+    }
+
+    btn.textContent   = '⏳ Thinking...';
+    btn.disabled      = true;
+    results.innerHTML = renderLoading(`Analyzing your ${category} spending...`);
+
+    try {
+        const res = await fetch('/ai/category-advice', {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body   : JSON.stringify({ category })
+        });
+        const data = await res.json();
+
+        if (data.success && data.tips.length > 0) {
+            results.innerHTML = renderTips(data.tips, 'blue');
+        } else {
+            results.innerHTML = renderError(data.error || 'No advice generated.');
+        }
+    } catch(e) {
+        results.innerHTML = renderError('Connection failed. Try again.');
+    }
+
+    btn.textContent = '🔄 Re-analyze';
+    btn.disabled    = false;
+}
+
+
+// ── Budget Recommendations ────────────────────
+async function loadBudgetRec() {
+    const btn     = document.getElementById('budgetBtn');
+    const results = document.getElementById('budgetResults');
+
+    btn.textContent   = '⏳ Calculating...';
+    btn.disabled      = true;
+    results.innerHTML = renderLoading('Building budget recommendations...');
+
+    try {
+        const res  = await fetch('/ai/budget-recommendations', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success && data.tips.length > 0) {
+            results.innerHTML = renderTips(data.tips, 'green');
+        } else {
+            results.innerHTML = renderError(data.error || 'Not enough data yet. Add more expenses first!');
+        }
+    } catch(e) {
+        results.innerHTML = renderError('Connection failed. Try again.');
+    }
+
+    btn.textContent = '🔄 Recalculate';
+    btn.disabled    = false;
+}
+
+
+// ── Render Helpers ────────────────────────────
+function renderLoading(msg) {
+    return `
+        <div class="ai-loading">
+            <div class="ai-spinner"></div>
+            <span>${msg}</span>
+        </div>`;
+}
+
+function renderError(msg) {
+    return `<div class="ai-error">❌ ${msg}</div>`;
+}
+
+function renderTips(tips, color) {
+    const tipCards = tips.map((tip, i) => `
+        <div class="ai-tip-card tip-${color}">
+            <div class="ai-tip-num">${i + 1}</div>
+            <div class="ai-tip-body">${tip}</div>
+            <button class="save-tip-btn"
+                    onclick="saveTip(this, '${escapeForAttr(tip)}')"
+                    title="Save this tip">
+                🔖 Save
+            </button>
+        </div>
+    `).join('');
+    return `<div class="ai-tips-list">${tipCards}</div>`;
+}
+
+function escapeForAttr(str) {
+    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+async function saveTip(btn, tipText) {
+    btn.textContent = '⏳...';
+    btn.disabled    = true;
+
+    try {
+        const res = await fetch('/saved-tips/save', {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body   : JSON.stringify({
+                tip_text: tipText,
+                source  : 'advisor',
+                category: 'General'
+            })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+            btn.textContent = '✅ Saved!';
+            btn.style.background = '#d1fae5';
+            btn.style.color      = '#065f46';
+        } else {
+            btn.textContent = data.error || '❌ Failed';
+            btn.disabled    = false;
+        }
+    } catch(e) {
+        btn.textContent = '❌ Error';
+        btn.disabled    = false;
+    }
+}
+</script>
+{% endblock %}

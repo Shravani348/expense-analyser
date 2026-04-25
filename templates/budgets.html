@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💼 Budget Management</h1>
+    <p>Set and manage your monthly budgets by category</p>
+</div>
+
+<div class="budget-layout">
+
+    <!-- ── LEFT: ADD / EDIT FORM ─────────────────── -->
+    <div class="form-card">
+
+        {% if edit_budget %}
+            <!-- EDIT MODE -->
+            <h2>✏️ Edit Budget</h2>
+            <form action="/budgets/update/{{ edit_budget['id'] }}" method="POST">
+        {% else %}
+            <!-- ADD MODE -->
+            <h2>➕ Set New Budget</h2>
+            <form action="/budgets/add" method="POST">
+        {% endif %}
+
+            <!-- Category Dropdown -->
+            <div class="form-group">
+                <label>Category</label>
+                <select name="category" required>
+                    <option value="">-- Select Category --</option>
+                    {% set categories = ['Food', 'Transport', 'Shopping', 'Entertainment',
+                                         'Health', 'Education', 'Rent', 'Utilities', 'Other'] %}
+                    {% for cat in categories %}
+                        <option value="{{ cat }}"
+                            {% if edit_budget and edit_budget['category'] == cat %}selected{% endif %}>
+                            {{ cat }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Amount -->
+            <div class="form-group">
+                <label>Budget Amount (₹)</label>
+                <input
+                    type="number"
+                    name="amount"
+                    placeholder="e.g. 5000"
+                    min="1"
+                    step="0.01"
+                    value="{{ edit_budget['amount'] if edit_budget else '' }}"
+                    required
+                >
+            </div>
+
+            <!-- Month -->
+            <div class="form-group">
+                <label>Month</label>
+                <select name="month" required>
+                    {% set months = ['January','February','March','April','May','June',
+                                     'July','August','September','October','November','December'] %}
+                    {% for i in range(1, 13) %}
+                        <option value="{{ i }}"
+                            {% if edit_budget %}
+                                {% if edit_budget['month'] == i %}selected{% endif %}
+                            {% elif current_month == i %}selected
+                            {% endif %}>
+                            {{ months[i-1] }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Year -->
+            <div class="form-group">
+                <label>Year</label>
+                <input
+                    type="number"
+                    name="year"
+                    min="2020"
+                    max="2100"
+                    value="{{ edit_budget['year'] if edit_budget else current_year }}"
+                    required
+                >
+            </div>
+
+            <!-- Buttons -->
+            {% if edit_budget %}
+                <button type="submit" class="btn btn-primary">💾 Update Budget</button>
+                <a href="{{ url_for('budgets') }}" class="btn btn-secondary">✖ Cancel</a>
+            {% else %}
+                <button type="submit" class="btn btn-primary">➕ Set Budget</button>
+            {% endif %}
+
+        </form>
+    </div>
+
+    <!-- ── RIGHT: BUDGETS LIST ────────────────────── -->
+    <div class="list-card">
+        <h2>📋 Your Budgets</h2>
+
+        {% if budgets %}
+            {% set months = ['','January','February','March','April','May','June',
+                              'July','August','September','October','November','December'] %}
+
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Amount (₹)</th>
+                        <th>Month</th>
+                        <th>Year</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in budgets %}
+                    <tr {% if edit_budget and edit_budget['id'] == b['id'] %}class="editing-row"{% endif %}>
+                        <td>
+                            <!-- Category emoji mapping -->
+                            {% if b['category'] == 'Food' %}🍔
+                            {% elif b['category'] == 'Transport' %}🚗
+                            {% elif b['category'] == 'Shopping' %}🛍️
+                            {% elif b['category'] == 'Entertainment' %}🎬
+                            {% elif b['category'] == 'Health' %}💊
+                            {% elif b['category'] == 'Education' %}📚
+                            {% elif b['category'] == 'Rent' %}🏠
+                            {% elif b['category'] == 'Utilities' %}💡
+                            {% else %}📦{% endif %}
+                            {{ b['category'] }}
+                        </td>
+                        <td class="amount">₹{{ "%.2f"|format(b['amount']) }}</td>
+                        <td>{{ months[b['month']] }}</td>
+                        <td>{{ b['year'] }}</td>
+                        <td class="action-btns">
+                            <a href="/budgets/edit/{{ b['id'] }}" class="btn-edit">✏️</a>
+                            <a href="/budgets/delete/{{ b['id'] }}"
+                               class="btn-delete"
+                               onclick="return confirm('Delete this budget?')">🗑️</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+        {% else %}
+            <!-- Empty state -->
+            <div class="empty-state">
+                <p>😕 No budgets set yet.</p>
+                <p>Use the form to add your first budget!</p>
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
