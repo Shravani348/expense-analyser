@@ -18,6 +18,15 @@ def get_connection():
     return conn
 
 
+
+def safe_execute(cursor, query):
+    try:
+        cursor.execute(query)
+    except pymysql.MySQLError as e:
+        if e.args[0] not in (1061, 1062): # duplicate key error
+            raise
+
+
 def create_tables():
     conn   = get_connection()
     cursor = conn.cursor()
@@ -111,7 +120,7 @@ def create_tables():
             amount      REAL    NOT NULL CHECK(amount > 0),
             date        DATE    NOT NULL
                                 ,
-            note        TEXT    DEFAULT '',
+            note        TEXT,
             created_at  TEXT    DEFAULT (CURRENT_TIMESTAMP),
             FOREIGN KEY (user_id)
                 REFERENCES users(id)
@@ -137,7 +146,7 @@ def create_tables():
             user_id      INTEGER NOT NULL,
             category_id  INTEGER NOT NULL,
             amount       REAL    NOT NULL CHECK(amount > 0),
-            note         TEXT    DEFAULT '',
+            note         TEXT,
             day_of_month INTEGER NOT NULL DEFAULT 1
                                  CHECK(day_of_month BETWEEN 1 AND 31),
             is_active    INTEGER NOT NULL DEFAULT 1
@@ -174,8 +183,8 @@ def create_tables():
     # CHECK constraint → only 'user' or 'assistant' allowed
 
     # Index for fast chat history lookup
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_chat_user_session
+    safe_execute(cursor, '''
+        CREATE INDEX idx_chat_user_session
         ON ai_chat_history(user_id, session_id)
     ''')
     # CHECK(is_active IN (0,1)) → only 0 or 1 allowed, like a boolean
@@ -188,32 +197,32 @@ def create_tables():
     # ════════════════════════════════════════════
 
     # Most queries filter by user_id — index it
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_expenses_user_id
+    safe_execute(cursor, '''
+        CREATE INDEX idx_expenses_user_id
         ON expenses(user_id)
     ''')
 
     # Dashboard filters by user_id + date together
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_expenses_user_date
+    safe_execute(cursor, '''
+        CREATE INDEX idx_expenses_user_date
         ON expenses(user_id, date)
     ''')
 
     # Category lookups in expenses
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_expenses_category
+    safe_execute(cursor, '''
+        CREATE INDEX idx_expenses_category
         ON expenses(category_id)
     ''')
 
     # Budget lookups by user + month + year
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_budgets_user_month
+    safe_execute(cursor, '''
+        CREATE INDEX idx_budgets_user_month
         ON budgets(user_id, month, year)
     ''')
 
     # Recurring expense lookups
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_recurring_user
+    safe_execute(cursor, '''
+        CREATE INDEX idx_recurring_user
         ON recurring_expenses(user_id, is_active)
     ''')
 
@@ -227,7 +236,7 @@ def create_tables():
     # Now we can SELECT * FROM v_expenses_full
     # and get category name automatically
     cursor.execute('''
-        CREATE VIEW IF NOT EXISTS v_expenses_full AS
+        CREATE OR REPLACE VIEW v_expenses_full AS
         SELECT
             e.id,
             e.user_id,
@@ -243,7 +252,7 @@ def create_tables():
 
     # View 2: budgets with category name joined in
     cursor.execute('''
-        CREATE VIEW IF NOT EXISTS v_budgets_full AS
+        CREATE OR REPLACE VIEW v_budgets_full AS
         SELECT
             b.id,
             b.user_id,
@@ -259,7 +268,7 @@ def create_tables():
     # View 3: monthly spending summary per user
     # Aggregates total spent per month automatically
     cursor.execute('''
-        CREATE VIEW IF NOT EXISTS v_monthly_summary AS
+        CREATE OR REPLACE VIEW v_monthly_summary AS
         SELECT
             e.user_id,
             DATE_FORMAT(e.date, '%Y')       AS year,
@@ -273,12 +282,12 @@ def create_tables():
             MIN(e.amount)                AS min_spent
         FROM expenses e
         JOIN categories c ON e.category_id = c.id
-        GROUP BY e.user_id, month_year, c.name
+        GROUP BY e.user_id, year, month, month_year, c.name
     ''')
 
     # View 4: recurring expenses with category name
     cursor.execute('''
-        CREATE VIEW IF NOT EXISTS v_recurring_full AS
+        CREATE OR REPLACE VIEW v_recurring_full AS
         SELECT
             r.id,
             r.user_id,
@@ -301,9 +310,9 @@ def create_tables():
             id         INTEGER PRIMARY KEY AUTO_INCREMENT,
             user_id    INTEGER NOT NULL,
             tip_text   TEXT    NOT NULL,
-            source     TEXT    NOT NULL DEFAULT 'advisor'
+            source     VARCHAR(255)    NOT NULL DEFAULT 'advisor'
                                CHECK(source IN ('advisor','chat')),
-            category   TEXT    DEFAULT 'General',
+            category   VARCHAR(255)    DEFAULT 'General',
             is_read    INTEGER NOT NULL DEFAULT 0
                                CHECK(is_read IN (0,1)),
             created_at TEXT    DEFAULT (CURRENT_TIMESTAMP),
@@ -316,8 +325,8 @@ def create_tables():
     # is_read  → 0 = unread, 1 = read (for badge count)
     # category → which spending category this tip is about
 
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_saved_tips_user
+    safe_execute(cursor, '''
+        CREATE INDEX idx_saved_tips_user
         ON saved_tips(user_id, is_read)
     ''')
 
@@ -332,7 +341,7 @@ def create_tables():
             saved_amount  REAL    NOT NULL DEFAULT 0
                                   CHECK(saved_amount >= 0),
             deadline      TEXT,
-            category      TEXT    DEFAULT 'General',
+            category      VARCHAR(255)    DEFAULT 'General',
             status        VARCHAR(50)    NOT NULL DEFAULT 'active'
                                   CHECK(status IN ('active','completed','cancelled')),
             ai_advice     TEXT,
@@ -349,13 +358,13 @@ def create_tables():
     # ai_advice     → AI generated advice stored in DB
     # status        → active/completed/cancelled
 
-    cursor.execute('''
-        CREATE INDEX IF NOT EXISTS idx_goals_user_status
+    safe_execute(cursor, '''
+        CREATE INDEX idx_goals_user_status
         ON goals(user_id, status)
     ''')
     conn.commit()
     conn.close()
-    print('✅ All tables, indexes, views created successfully!')
+    print('All tables, indexes, views created successfully!')
 
 
 def get_category_id(cursor, category_name):
