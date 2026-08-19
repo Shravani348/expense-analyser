@@ -60,16 +60,16 @@ def inject_alerts():
         cursor.execute('''
             SELECT category, total_spent AS spent
             FROM v_monthly_summary
-            WHERE user_id = ?
-            AND month = ? AND year = ?
+            WHERE user_id = %s
+            AND month = %s AND year = %s
         ''', (session['user_id'], str(now.month).zfill(2), str(now.year)))
         spent_rows = cursor.fetchall()
 
         cursor.execute('''
             SELECT category, amount AS budget
             FROM v_budgets_full
-            WHERE user_id = ?
-            AND month = ? AND year = ?
+            WHERE user_id = %s
+            AND month = %s AND year = %s
         ''', (session['user_id'], now.month, now.year))
         budget_rows = cursor.fetchall()
 
@@ -93,7 +93,7 @@ def inject_alerts():
     try:
         cursor.execute('''
             SELECT COUNT(*) AS cnt FROM saved_tips
-            WHERE user_id = ? AND is_read = 0
+            WHERE user_id = %s AND is_read = 0
         ''', (session['user_id'],))
         unread_tips = cursor.fetchone()['cnt']
     except:
@@ -122,7 +122,7 @@ def auto_add_recurring(user_id):
     # Uses v_recurring_full VIEW (has category_id + category name)
     cursor.execute('''
         SELECT * FROM v_recurring_full
-        WHERE user_id = ? AND is_active = 1
+        WHERE user_id = %s AND is_active = 1
     ''', (user_id,))
     recurrings = cursor.fetchall()
 
@@ -136,7 +136,7 @@ def auto_add_recurring(user_id):
 
         cursor.execute('''
             INSERT INTO expenses (user_id, category_id, amount, date, note)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         ''', (
             user_id,
             rec['category_id'],
@@ -147,7 +147,7 @@ def auto_add_recurring(user_id):
 
         cursor.execute('''
             UPDATE recurring_expenses
-            SET last_added = ? WHERE id = ?
+            SET last_added = %s WHERE id = %s
         ''', (month_key, rec['id']))
 
     conn.commit()
@@ -189,7 +189,7 @@ def register():
         try:
             cursor.execute('''
                 INSERT INTO users (username, email, password)
-                VALUES (?, ?, ?)
+                VALUES (%s, %s, %s)
             ''', (username, email, hashed_password))
             conn.commit()
             flash('Account created! Please login.', 'success')
@@ -218,7 +218,7 @@ def login():
 
         conn   = get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users WHERE username = ?', (username,))
+        cursor.execute('SELECT * FROM users WHERE username = %s', (username,))
         user = cursor.fetchone()
         conn.close()
 
@@ -270,9 +270,9 @@ def dashboard():
     cursor.execute('''
         SELECT COALESCE(SUM(amount), 0) AS total
         FROM v_expenses_full
-        WHERE user_id = ?
-        AND strftime('%m', date) = ?
-        AND strftime('%Y', date) = ?
+        WHERE user_id = %s
+        AND DATE_FORMAT(date, '%%m') = %s
+        AND DATE_FORMAT(date, '%%Y') = %s
     ''', (session['user_id'], str(current_month).zfill(2), str(current_year)))
     total_spent_this_month = cursor.fetchone()['total']
 
@@ -280,7 +280,7 @@ def dashboard():
     cursor.execute('''
         SELECT COALESCE(SUM(amount), 0) AS total
         FROM v_budgets_full
-        WHERE user_id = ? AND month = ? AND year = ?
+        WHERE user_id = %s AND month = %s AND year = %s
     ''', (session['user_id'], current_month, current_year))
     total_budget_this_month = cursor.fetchone()['total']
 
@@ -288,8 +288,8 @@ def dashboard():
     cursor.execute('''
         SELECT category, total_spent AS spent, txn_count
         FROM v_monthly_summary
-        WHERE user_id = ?
-        AND month = ? AND year = ?
+        WHERE user_id = %s
+        AND month = %s AND year = %s
     ''', (session['user_id'], str(current_month).zfill(2), str(current_year)))
     category_spent_rows = cursor.fetchall()
 
@@ -297,7 +297,7 @@ def dashboard():
     cursor.execute('''
         SELECT category, amount AS budget
         FROM v_budgets_full
-        WHERE user_id = ? AND month = ? AND year = ?
+        WHERE user_id = %s AND month = %s AND year = %s
     ''', (session['user_id'], current_month, current_year))
     category_budget_rows = cursor.fetchall()
 
@@ -305,7 +305,7 @@ def dashboard():
     cursor.execute('''
         SELECT month_year, SUM(total_spent) AS total
         FROM v_monthly_summary
-        WHERE user_id = ?
+        WHERE user_id = %s
         GROUP BY month_year
         ORDER BY month_year DESC
         LIMIT 6
@@ -318,7 +318,7 @@ def dashboard():
                c.name AS category
         FROM expenses e
         JOIN categories c ON e.category_id = c.id
-        WHERE e.user_id = ?
+        WHERE e.user_id = %s
         ORDER BY e.date DESC
         LIMIT 5
     ''', (session['user_id'],))
@@ -326,7 +326,7 @@ def dashboard():
 
     # 7. Total count
     cursor.execute('''
-        SELECT COUNT(*) AS count FROM expenses WHERE user_id = ?
+        SELECT COUNT(*) AS count FROM expenses WHERE user_id = %s
     ''', (session['user_id'],))
     total_expense_count = cursor.fetchone()['count']
 
@@ -391,7 +391,7 @@ def budgets():
     cursor = conn.cursor()
     cursor.execute('''
         SELECT * FROM v_budgets_full
-        WHERE user_id = ?
+        WHERE user_id = %s
         ORDER BY year DESC, month DESC
     ''', (session['user_id'],))
     budgets = cursor.fetchall()
@@ -445,7 +445,7 @@ def add_budget():
 
     cursor.execute('''
         SELECT id FROM budgets
-        WHERE user_id=? AND category_id=? AND month=? AND year=?
+        WHERE user_id=%s AND category_id=%s AND month=%s AND year=%s
     ''', (session['user_id'], category_id, month, year))
 
     if cursor.fetchone():
@@ -456,7 +456,7 @@ def add_budget():
     try:
         cursor.execute('''
             INSERT INTO budgets (user_id, category_id, amount, month, year)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         ''', (session['user_id'], category_id, amount, month, year))
         conn.commit()
         flash(f'✅ Budget for {category} set!', 'success')
@@ -483,7 +483,7 @@ def edit_budget(budget_id):
     # Use VIEW to get budget with category name
     cursor.execute('''
         SELECT * FROM v_budgets_full
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (budget_id, session['user_id']))
     budget = cursor.fetchone()
 
@@ -494,7 +494,7 @@ def edit_budget(budget_id):
 
     cursor.execute('''
         SELECT * FROM v_budgets_full
-        WHERE user_id = ?
+        WHERE user_id = %s
         ORDER BY year DESC, month DESC
     ''', (session['user_id'],))
     all_budgets = cursor.fetchall()
@@ -546,8 +546,8 @@ def update_budget(budget_id):
 
     cursor.execute('''
         UPDATE budgets
-        SET category_id = ?, amount = ?, month = ?, year = ?
-        WHERE id = ? AND user_id = ?
+        SET category_id = %s, amount = %s, month = %s, year = %s
+        WHERE id = %s AND user_id = %s
     ''', (category_id, amount, month, year, budget_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -568,7 +568,7 @@ def delete_budget(budget_id):
     conn   = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        DELETE FROM budgets WHERE id = ? AND user_id = ?
+        DELETE FROM budgets WHERE id = %s AND user_id = %s
     ''', (budget_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -598,17 +598,17 @@ def expenses():
     cursor = conn.cursor()
 
     # Uses v_expenses_full VIEW — JOIN already done
-    query  = 'SELECT * FROM v_expenses_full WHERE user_id = ?'
+    query  = 'SELECT * FROM v_expenses_full WHERE user_id = %s'
     params = [session['user_id']]
 
     if filter_category:
-        query  += ' AND category = ?'
+        query  += ' AND category = %s'
         params.append(filter_category)
     if filter_month:
-        query  += " AND strftime('%m', date) = ?"
+        query  += " AND DATE_FORMAT(date, '%%m') = %s"
         params.append(filter_month.zfill(2))
     if filter_year:
-        query  += " AND strftime('%Y', date) = ?"
+        query  += " AND DATE_FORMAT(date, '%%Y') = %s"
         params.append(filter_year)
 
     query += ' ORDER BY date DESC'
@@ -668,7 +668,7 @@ def add_expense():
     try:
         cursor.execute('''
             INSERT INTO expenses (user_id, category_id, amount, date, note)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         ''', (session['user_id'], category_id, amount, exp_date, note))
         conn.commit()
         flash(f'✅ Expense of ₹{amount:.2f} added!', 'success')
@@ -696,7 +696,7 @@ def edit_expense(expense_id):
     # Use VIEW — gets category name too
     cursor.execute('''
         SELECT * FROM v_expenses_full
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (expense_id, session['user_id']))
     expense = cursor.fetchone()
 
@@ -707,7 +707,7 @@ def edit_expense(expense_id):
 
     cursor.execute('''
         SELECT * FROM v_expenses_full
-        WHERE user_id = ? ORDER BY date DESC
+        WHERE user_id = %s ORDER BY date DESC
     ''', (session['user_id'],))
     all_expenses = cursor.fetchall()
     total_spent  = sum(e['amount'] for e in all_expenses)
@@ -760,8 +760,8 @@ def update_expense(expense_id):
 
     cursor.execute('''
         UPDATE expenses
-        SET category_id = ?, amount = ?, date = ?, note = ?
-        WHERE id = ? AND user_id = ?
+        SET category_id = %s, amount = %s, date = %s, note = %s
+        WHERE id = %s AND user_id = %s
     ''', (category_id, amount, exp_date, note, expense_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -782,7 +782,7 @@ def delete_expense(expense_id):
     conn   = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        DELETE FROM expenses WHERE id = ? AND user_id = ?
+        DELETE FROM expenses WHERE id = %s AND user_id = %s
     ''', (expense_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -806,7 +806,7 @@ def recurring():
     # Use v_recurring_full VIEW — has category name
     cursor.execute('''
         SELECT * FROM v_recurring_full
-        WHERE user_id = ?
+        WHERE user_id = %s
         ORDER BY id DESC
     ''', (session['user_id'],))
     recurrings = cursor.fetchall()
@@ -863,7 +863,7 @@ def add_recurring():
     cursor.execute('''
         INSERT INTO recurring_expenses
             (user_id, category_id, amount, note, day_of_month, is_active)
-        VALUES (?, ?, ?, ?, ?, 1)
+        VALUES (%s, %s, %s, %s, %s, 1)
     ''', (session['user_id'], category_id, amount, note, day_of_month))
     conn.commit()
     conn.close()
@@ -887,7 +887,7 @@ def edit_recurring(rec_id):
     # Use VIEW to get with category name
     cursor.execute('''
         SELECT * FROM v_recurring_full
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (rec_id, session['user_id']))
     edit_rec = cursor.fetchone()
 
@@ -898,7 +898,7 @@ def edit_recurring(rec_id):
 
     cursor.execute('''
         SELECT * FROM v_recurring_full
-        WHERE user_id = ? ORDER BY id DESC
+        WHERE user_id = %s ORDER BY id DESC
     ''', (session['user_id'],))
     recurrings = cursor.fetchall()
     conn.close()
@@ -951,12 +951,12 @@ def update_recurring(rec_id):
     # Reset last_added so re-adds this month with new values
     cursor.execute('''
         UPDATE recurring_expenses
-        SET category_id  = ?,
-            amount       = ?,
-            note         = ?,
-            day_of_month = ?,
+        SET category_id  = %s,
+            amount       = %s,
+            note         = %s,
+            day_of_month = %s,
             last_added   = NULL
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (category_id, amount, note, day_of_month, rec_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -979,7 +979,7 @@ def toggle_recurring(rec_id):
     cursor.execute('''
         UPDATE recurring_expenses
         SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (rec_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -1001,7 +1001,7 @@ def delete_recurring(rec_id):
     cursor = conn.cursor()
     cursor.execute('''
         DELETE FROM recurring_expenses
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (rec_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -1029,12 +1029,12 @@ def search():
     cursor.execute('''
         SELECT id, category, amount, date, note
         FROM v_expenses_full
-        WHERE user_id = ?
+        WHERE user_id = %s
         AND (
-            category LIKE ?
-            OR note   LIKE ?
-            OR CAST(amount AS TEXT) LIKE ?
-            OR date   LIKE ?
+            category LIKE %s
+            OR note   LIKE %s
+            OR CAST(amount AS TEXT) LIKE %s
+            OR date   LIKE %s
         )
         ORDER BY date DESC
         LIMIT 10
@@ -1079,8 +1079,8 @@ def alerts():
     cursor.execute('''
         SELECT category, total_spent AS spent, txn_count
         FROM v_monthly_summary
-        WHERE user_id = ?
-        AND month = ? AND year = ?
+        WHERE user_id = %s
+        AND month = %s AND year = %s
     ''', (session['user_id'], str(current_month).zfill(2), str(current_year)))
     spent_rows = cursor.fetchall()
 
@@ -1088,7 +1088,7 @@ def alerts():
     cursor.execute('''
         SELECT category, amount AS budget
         FROM v_budgets_full
-        WHERE user_id = ? AND month = ? AND year = ?
+        WHERE user_id = %s AND month = %s AND year = %s
     ''', (session['user_id'], current_month, current_year))
     budget_rows = cursor.fetchall()
     conn.close()
@@ -1168,11 +1168,11 @@ def reports():
     # All queries use v_expenses_full VIEW
     query  = '''
         SELECT * FROM v_expenses_full
-        WHERE user_id = ? AND date >= ? AND date <= ?
+        WHERE user_id = %s AND date >= %s AND date <= %s
     '''
     params = [session['user_id'], from_date, to_date]
     if filter_category:
-        query  += ' AND category = ?'
+        query  += ' AND category = %s'
         params.append(filter_category)
     query += ' ORDER BY date DESC'
 
@@ -1188,11 +1188,11 @@ def reports():
                MAX(amount) AS highest,
                MIN(amount) AS lowest
         FROM v_expenses_full
-        WHERE user_id = ? AND date >= ? AND date <= ?
+        WHERE user_id = %s AND date >= %s AND date <= %s
     '''
     cat_params = [session['user_id'], from_date, to_date]
     if filter_category:
-        cat_query  += ' AND category = ?'
+        cat_query  += ' AND category = %s'
         cat_params.append(filter_category)
     cat_query += ' GROUP BY category ORDER BY total DESC'
 
@@ -1202,7 +1202,7 @@ def reports():
     cursor.execute('''
         SELECT date, SUM(amount) AS total
         FROM v_expenses_full
-        WHERE user_id = ? AND date >= ? AND date <= ?
+        WHERE user_id = %s AND date >= %s AND date <= %s
         GROUP BY date ORDER BY date ASC
     ''', (session['user_id'], from_date, to_date))
     daily_trend = [
@@ -1215,7 +1215,7 @@ def reports():
                strftime('%m', date) AS month,
                strftime('%Y', date) AS year
         FROM v_expenses_full
-        WHERE user_id = ? AND date >= ? AND date <= ?
+        WHERE user_id = %s AND date >= %s AND date <= %s
     ''', (session['user_id'], from_date, to_date))
     months_in_range = cursor.fetchall()
 
@@ -1224,7 +1224,7 @@ def reports():
         cursor.execute('''
             SELECT COALESCE(SUM(amount), 0) AS total
             FROM v_budgets_full
-            WHERE user_id = ? AND month = ? AND year = ?
+            WHERE user_id = %s AND month = %s AND year = %s
         ''', (session['user_id'], int(m['month']), int(m['year'])))
         total_budget_in_range += cursor.fetchone()['total']
 
@@ -1283,11 +1283,11 @@ def export_csv():
     query  = '''
         SELECT category, amount, date, note
         FROM v_expenses_full
-        WHERE user_id = ? AND date >= ? AND date <= ?
+        WHERE user_id = %s AND date >= %s AND date <= %s
     '''
     params = [session['user_id'], from_date, to_date]
     if filter_category:
-        query  += ' AND category = ?'
+        query  += ' AND category = %s'
         params.append(filter_category)
     query += ' ORDER BY date DESC'
 
@@ -1333,7 +1333,7 @@ def profile():
 
     conn   = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],))
+    cursor.execute('SELECT * FROM users WHERE id = %s', (session['user_id'],))
     user = cursor.fetchone()
     conn.close()
     return render_template('profile.html', user=user)
@@ -1359,8 +1359,8 @@ def update_profile():
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            UPDATE users SET username = ?, email = ?
-            WHERE id = ?
+            UPDATE users SET username = %s, email = %s
+            WHERE id = %s
         ''', (new_username, new_email, session['user_id']))
         conn.commit()
         session['username'] = new_username
@@ -1400,7 +1400,7 @@ def change_password():
 
     conn   = get_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],))
+    cursor.execute('SELECT * FROM users WHERE id = %s', (session['user_id'],))
     user = cursor.fetchone()
 
     if not check_password_hash(user['password'], current_password):
@@ -1409,7 +1409,7 @@ def change_password():
         return redirect(url_for('profile'))
 
     cursor.execute('''
-        UPDATE users SET password = ? WHERE id = ?
+        UPDATE users SET password = %s WHERE id = %s
     ''', (generate_password_hash(new_password), session['user_id']))
     conn.commit()
     conn.close()
@@ -1434,7 +1434,7 @@ def delete_account():
     # CASCADE DELETE on FK means deleting user
     # automatically removes all expenses, budgets
     # and recurring expenses — no manual deletes needed!
-    cursor.execute('DELETE FROM users WHERE id = ?', (session['user_id'],))
+    cursor.execute('DELETE FROM users WHERE id = %s', (session['user_id'],))
     conn.commit()
     conn.close()
 
@@ -1465,8 +1465,8 @@ def ai_advisor():
     cursor.execute('''
         SELECT category, total_spent AS spent, txn_count
         FROM v_monthly_summary
-        WHERE user_id = ?
-        AND month = ? AND year = ?
+        WHERE user_id = %s
+        AND month = %s AND year = %s
     ''', (session['user_id'],
           str(current_month).zfill(2),
           str(current_year)))
@@ -1476,7 +1476,7 @@ def ai_advisor():
     cursor.execute('''
         SELECT category, amount AS budget
         FROM v_budgets_full
-        WHERE user_id = ? AND month = ? AND year = ?
+        WHERE user_id = %s AND month = %s AND year = %s
     ''', (session['user_id'], current_month, current_year))
     budget_rows = cursor.fetchall()
 
@@ -1486,7 +1486,7 @@ def ai_advisor():
                AVG(total_spent) AS avg_spent,
                COUNT(*)         AS months_count
         FROM v_monthly_summary
-        WHERE user_id = ?
+        WHERE user_id = %s
         GROUP BY category
         ORDER BY avg_spent DESC
     ''', (session['user_id'],))
@@ -1551,8 +1551,8 @@ def ai_spending_tips():
     cursor.execute('''
         SELECT category, total_spent AS spent, txn_count
         FROM v_monthly_summary
-        WHERE user_id = ?
-        AND month = ? AND year = ?
+        WHERE user_id = %s
+        AND month = %s AND year = %s
     ''', (session['user_id'],
           str(now.month).zfill(2), str(now.year)))
     spent_rows = cursor.fetchall()
@@ -1560,7 +1560,7 @@ def ai_spending_tips():
     cursor.execute('''
         SELECT category, amount AS budget
         FROM v_budgets_full
-        WHERE user_id = ? AND month = ? AND year = ?
+        WHERE user_id = %s AND month = %s AND year = %s
     ''', (session['user_id'], now.month, now.year))
     budget_rows = cursor.fetchall()
     conn.close()
@@ -1605,16 +1605,16 @@ def ai_category_advice():
     cursor.execute('''
         SELECT total_spent AS spent, txn_count
         FROM v_monthly_summary
-        WHERE user_id = ? AND category = ?
-        AND month = ? AND year = ?
+        WHERE user_id = %s AND category = %s
+        AND month = %s AND year = %s
     ''', (session['user_id'], category,
           str(now.month).zfill(2), str(now.year)))
     row = cursor.fetchone()
 
     cursor.execute('''
         SELECT amount AS budget FROM v_budgets_full
-        WHERE user_id = ? AND category = ?
-        AND month = ? AND year = ?
+        WHERE user_id = %s AND category = %s
+        AND month = %s AND year = %s
     ''', (session['user_id'], category, now.month, now.year))
     budget_row = cursor.fetchone()
     conn.close()
@@ -1654,7 +1654,7 @@ def ai_budget_recommendations():
     cursor.execute('''
         SELECT category, AVG(total_spent) AS avg_spent
         FROM v_monthly_summary
-        WHERE user_id = ?
+        WHERE user_id = %s
         GROUP BY category
         ORDER BY avg_spent DESC
     ''', (session['user_id'],))
@@ -1708,7 +1708,7 @@ def ai_chat():
                COUNT(*)        AS message_count,
                MIN(CASE WHEN role='user' THEN message END) AS first_message
         FROM ai_chat_history
-        WHERE user_id = ?
+        WHERE user_id = %s
         GROUP BY session_id
         ORDER BY started_at DESC
         LIMIT 10
@@ -1723,7 +1723,7 @@ def ai_chat():
         cursor.execute('''
             SELECT role, message, created_at
             FROM ai_chat_history
-            WHERE user_id = ? AND session_id = ?
+            WHERE user_id = %s AND session_id = %s
             ORDER BY created_at ASC
         ''', (session['user_id'], current_session_id))
         current_messages = cursor.fetchall()
@@ -1778,13 +1778,13 @@ def ai_chat_send():
     cursor.execute('''
         INSERT INTO ai_chat_history
             (user_id, session_id, role, message)
-        VALUES (?, ?, 'user', ?)
+        VALUES (%s, %s, 'user', %s)
     ''', (session['user_id'], session_id, user_msg))
 
     # ── Get chat history for context ──────────────
     cursor.execute('''
         SELECT role, message FROM ai_chat_history
-        WHERE user_id = ? AND session_id = ?
+        WHERE user_id = %s AND session_id = %s
         ORDER BY created_at ASC
     ''', (session['user_id'], session_id))
     history = [dict(row) for row in cursor.fetchall()]
@@ -1818,7 +1818,7 @@ def ai_chat_send():
     cursor.execute('''
         INSERT INTO ai_chat_history
             (user_id, session_id, role, message)
-        VALUES (?, ?, 'assistant', ?)
+        VALUES (%s, %s, 'assistant', %s)
     ''', (session['user_id'], session_id, ai_response))
 
     conn.commit()
@@ -1844,7 +1844,7 @@ def ai_chat_delete(session_id):
 
     cursor.execute('''
         DELETE FROM ai_chat_history
-        WHERE user_id = ? AND session_id = ?
+        WHERE user_id = %s AND session_id = %s
     ''', (session['user_id'], session_id))
 
     conn.commit()
@@ -1868,14 +1868,14 @@ def saved_tips():
     # Mark all as read when page is opened
     cursor.execute('''
         UPDATE saved_tips SET is_read = 1
-        WHERE user_id = ? AND is_read = 0
+        WHERE user_id = %s AND is_read = 0
     ''', (session['user_id'],))
     conn.commit()
 
     # Fetch all saved tips newest first
     cursor.execute('''
         SELECT * FROM saved_tips
-        WHERE user_id = ?
+        WHERE user_id = %s
         ORDER BY created_at DESC
     ''', (session['user_id'],))
     tips = cursor.fetchall()
@@ -1906,7 +1906,7 @@ def save_tip():
     # Check if already saved (avoid duplicates)
     cursor.execute('''
         SELECT id FROM saved_tips
-        WHERE user_id = ? AND tip_text = ?
+        WHERE user_id = %s AND tip_text = %s
     ''', (session['user_id'], tip_text))
 
     if cursor.fetchone():
@@ -1915,7 +1915,7 @@ def save_tip():
 
     cursor.execute('''
         INSERT INTO saved_tips (user_id, tip_text, source, category)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     ''', (session['user_id'], tip_text, source, category))
 
     conn.commit()
@@ -1937,7 +1937,7 @@ def delete_tip(tip_id):
     cursor = conn.cursor()
     cursor.execute('''
         DELETE FROM saved_tips
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (tip_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -1961,7 +1961,7 @@ def goals():
     # Active goals
     cursor.execute('''
         SELECT * FROM goals
-        WHERE user_id = ? AND status = 'active'
+        WHERE user_id = %s AND status = 'active'
         ORDER BY created_at DESC
     ''', (session['user_id'],))
     active_goals = cursor.fetchall()
@@ -1969,7 +1969,7 @@ def goals():
     # Completed goals
     cursor.execute('''
         SELECT * FROM goals
-        WHERE user_id = ? AND status = 'completed'
+        WHERE user_id = %s AND status = 'completed'
         ORDER BY updated_at DESC
     ''', (session['user_id'],))
     completed_goals = cursor.fetchall()
@@ -1979,7 +1979,7 @@ def goals():
         SELECT COALESCE(SUM(saved_amount), 0)  AS total_saved,
                COALESCE(SUM(target_amount), 0) AS total_target
         FROM goals
-        WHERE user_id = ? AND status = 'active'
+        WHERE user_id = %s AND status = 'active'
     ''', (session['user_id'],))
     totals = cursor.fetchone()
 
@@ -2026,7 +2026,7 @@ def add_goal():
     cursor.execute('''
         INSERT INTO goals
             (user_id, title, target_amount, deadline, category)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     ''', (
         session['user_id'],
         title,
@@ -2067,7 +2067,7 @@ def deposit_goal(goal_id):
     # Get goal first
     cursor.execute('''
         SELECT * FROM goals
-        WHERE id = ? AND user_id = ? AND status = 'active'
+        WHERE id = %s AND user_id = %s AND status = 'active'
     ''', (goal_id, session['user_id']))
     goal = cursor.fetchone()
 
@@ -2085,10 +2085,10 @@ def deposit_goal(goal_id):
 
     cursor.execute('''
         UPDATE goals
-        SET saved_amount = ?,
-            status       = ?,
+        SET saved_amount = %s,
+            status       = %s,
             updated_at   = datetime('now')
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (new_saved, new_status, goal_id, session['user_id']))
 
     conn.commit()
@@ -2118,7 +2118,7 @@ def goal_ai_advice(goal_id):
 
     cursor.execute('''
         SELECT * FROM goals
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (goal_id, session['user_id']))
     goal = cursor.fetchone()
 
@@ -2142,9 +2142,9 @@ def goal_ai_advice(goal_id):
         # Save AI advice to DB for this goal
         cursor.execute('''
             UPDATE goals
-            SET ai_advice   = ?,
+            SET ai_advice   = %s,
                 updated_at  = datetime('now')
-            WHERE id = ? AND user_id = ?
+            WHERE id = %s AND user_id = %s
         ''', (result['advice'], goal_id, session['user_id']))
         conn.commit()
 
@@ -2164,7 +2164,7 @@ def delete_goal(goal_id):
     conn   = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        DELETE FROM goals WHERE id = ? AND user_id = ?
+        DELETE FROM goals WHERE id = %s AND user_id = %s
     ''', (goal_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -2187,7 +2187,7 @@ def cancel_goal(goal_id):
     cursor.execute('''
         UPDATE goals SET status = 'cancelled',
         updated_at = datetime('now')
-        WHERE id = ? AND user_id = ?
+        WHERE id = %s AND user_id = %s
     ''', (goal_id, session['user_id']))
     conn.commit()
     conn.close()

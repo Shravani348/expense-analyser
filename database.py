@@ -1,22 +1,20 @@
-import sqlite3
+import pymysql
+import os
+from dotenv import load_dotenv
 
-DATABASE = 'expense.db'
+load_dotenv()
+
 
 
 def get_connection():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-
-    # ── PRAGMA 1: Enable Foreign Keys ─────────────
-    # SQLite disables FK enforcement by default
-    # This enables CASCADE DELETE to actually work
-    conn.execute('PRAGMA foreign_keys = ON')
-
-    # ── PRAGMA 2: WAL Mode ─────────────────────────
-    # Write-Ahead Logging = faster reads & writes
-    # Multiple readers can read while one writes
-    conn.execute('PRAGMA journal_mode = WAL')
-
+    conn = pymysql.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        user=os.getenv('DB_USER', 'root'),
+        password=os.getenv('DB_PASSWORD', ''),
+        database=os.getenv('DB_NAME', 'expense_db'),
+        port=int(os.getenv('DB_PORT', 3306)),
+        cursorclass=pymysql.cursors.DictCursor
+    )
     return conn
 
 
@@ -33,8 +31,8 @@ def create_tables():
     # ════════════════════════════════════════════
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS categories (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT    NOT NULL UNIQUE
+            id   INTEGER PRIMARY KEY AUTO_INCREMENT,
+            name VARCHAR(255) NOT NULL UNIQUE
         )
     ''')
 
@@ -45,7 +43,7 @@ def create_tables():
     ]
     for cat in default_categories:
         cursor.execute('''
-            INSERT OR IGNORE INTO categories (name) VALUES (?)
+            INSERT IGNORE INTO categories (name) VALUES (%s)
         ''', (cat,))
 
     # ════════════════════════════════════════════
@@ -55,12 +53,12 @@ def create_tables():
     # ════════════════════════════════════════════
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
-            id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT    NOT NULL UNIQUE
+            id       INTEGER PRIMARY KEY AUTO_INCREMENT,
+            username VARCHAR(255) NOT NULL UNIQUE
                             CHECK(length(username) >= 3),
-            email    TEXT    NOT NULL UNIQUE,
+            email VARCHAR(255) NOT NULL UNIQUE,
             password TEXT    NOT NULL,
-            created_at TEXT  DEFAULT (datetime('now'))
+            created_at TEXT  DEFAULT (CURRENT_TIMESTAMP)
         )
     ''')
     # CHECK(length(username) >= 3)
@@ -78,7 +76,7 @@ def create_tables():
     # ════════════════════════════════════════════
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS budgets (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            id          INTEGER PRIMARY KEY AUTO_INCREMENT,
             user_id     INTEGER NOT NULL,
             category_id INTEGER NOT NULL,
             amount      REAL    NOT NULL CHECK(amount > 0),
@@ -107,14 +105,14 @@ def create_tables():
     # ════════════════════════════════════════════
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS expenses (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            id          INTEGER PRIMARY KEY AUTO_INCREMENT,
             user_id     INTEGER NOT NULL,
             category_id INTEGER NOT NULL,
             amount      REAL    NOT NULL CHECK(amount > 0),
-            date        TEXT    NOT NULL
-                                CHECK(date LIKE '____-__-__'),
+            date        DATE    NOT NULL
+                                ,
             note        TEXT    DEFAULT '',
-            created_at  TEXT    DEFAULT (datetime('now')),
+            created_at  TEXT    DEFAULT (CURRENT_TIMESTAMP),
             FOREIGN KEY (user_id)
                 REFERENCES users(id)
                 ON DELETE CASCADE,
@@ -123,7 +121,7 @@ def create_tables():
                 ON DELETE RESTRICT
         )
     ''')
-    # CHECK(date LIKE '____-__-__')
+    # 
     # → enforces YYYY-MM-DD format at DB level
     # CHECK(amount > 0)
     # → database rejects negative or zero amounts
@@ -135,7 +133,7 @@ def create_tables():
     # ════════════════════════════════════════════
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS recurring_expenses (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            id           INTEGER PRIMARY KEY AUTO_INCREMENT,
             user_id      INTEGER NOT NULL,
             category_id  INTEGER NOT NULL,
             amount       REAL    NOT NULL CHECK(amount > 0),
@@ -145,7 +143,7 @@ def create_tables():
             is_active    INTEGER NOT NULL DEFAULT 1
                                  CHECK(is_active IN (0, 1)),
             last_added   TEXT,
-            created_at   TEXT    DEFAULT (datetime('now')),
+            created_at   TEXT    DEFAULT (CURRENT_TIMESTAMP),
             FOREIGN KEY (user_id)
                 REFERENCES users(id)
                 ON DELETE CASCADE,
@@ -160,12 +158,12 @@ def create_tables():
     # role = 'user' or 'assistant'
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS ai_chat_history (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            id         INTEGER PRIMARY KEY AUTO_INCREMENT,
             user_id    INTEGER NOT NULL,
-            session_id TEXT    NOT NULL,
+            session_id VARCHAR(255)    NOT NULL,
             role       TEXT    NOT NULL CHECK(role IN ('user','assistant')),
             message    TEXT    NOT NULL,
-            created_at TEXT    DEFAULT (datetime('now')),
+            created_at TEXT    DEFAULT (CURRENT_TIMESTAMP),
             FOREIGN KEY (user_id)
                 REFERENCES users(id)
                 ON DELETE CASCADE
@@ -264,9 +262,9 @@ def create_tables():
         CREATE VIEW IF NOT EXISTS v_monthly_summary AS
         SELECT
             e.user_id,
-            strftime('%Y', e.date)       AS year,
-            strftime('%m', e.date)       AS month,
-            strftime('%Y-%m', e.date)    AS month_year,
+            DATE_FORMAT(e.date, '%Y')       AS year,
+            DATE_FORMAT(e.date, '%m')       AS month,
+            DATE_FORMAT(e.date, '%Y-%m')    AS month_year,
             c.name                       AS category,
             COUNT(*)                     AS txn_count,
             SUM(e.amount)                AS total_spent,
@@ -300,7 +298,7 @@ def create_tables():
     # source = 'advisor' or 'chat'
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS saved_tips (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            id         INTEGER PRIMARY KEY AUTO_INCREMENT,
             user_id    INTEGER NOT NULL,
             tip_text   TEXT    NOT NULL,
             source     TEXT    NOT NULL DEFAULT 'advisor'
@@ -308,7 +306,7 @@ def create_tables():
             category   TEXT    DEFAULT 'General',
             is_read    INTEGER NOT NULL DEFAULT 0
                                CHECK(is_read IN (0,1)),
-            created_at TEXT    DEFAULT (datetime('now')),
+            created_at TEXT    DEFAULT (CURRENT_TIMESTAMP),
             FOREIGN KEY (user_id)
                 REFERENCES users(id)
                 ON DELETE CASCADE
@@ -327,7 +325,7 @@ def create_tables():
     # Savings goals like "Save ₹15000 for a phone"
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS goals (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            id            INTEGER PRIMARY KEY AUTO_INCREMENT,
             user_id       INTEGER NOT NULL,
             title         TEXT    NOT NULL,
             target_amount REAL    NOT NULL CHECK(target_amount > 0),
@@ -335,11 +333,11 @@ def create_tables():
                                   CHECK(saved_amount >= 0),
             deadline      TEXT,
             category      TEXT    DEFAULT 'General',
-            status        TEXT    NOT NULL DEFAULT 'active'
+            status        VARCHAR(50)    NOT NULL DEFAULT 'active'
                                   CHECK(status IN ('active','completed','cancelled')),
             ai_advice     TEXT,
-            created_at    TEXT    DEFAULT (datetime('now')),
-            updated_at    TEXT    DEFAULT (datetime('now')),
+            created_at    TEXT    DEFAULT (CURRENT_TIMESTAMP),
+            updated_at    TEXT    DEFAULT (CURRENT_TIMESTAMP),
             FOREIGN KEY (user_id)
                 REFERENCES users(id)
                 ON DELETE CASCADE
@@ -366,7 +364,7 @@ def get_category_id(cursor, category_name):
     Used in INSERT queries throughout app.py
     """
     cursor.execute(
-        'SELECT id FROM categories WHERE name = ?',
+        'SELECT id FROM categories WHERE name = %s',
         (category_name,)
     )
     row = cursor.fetchone()
